@@ -7,6 +7,64 @@ Pensacola-first marketplace for furniture, lumber, and other bulky loads. One Su
 
 Money is integer cents. The quote formula lives in `packages/shared` and is copied in `supabase/functions/_shared/pricing.ts`.
 
+## After merge: first run
+
+This is the path if you have never run a local app. You do not edit code. You install four tools, start the database, then tap through the phone app and the admin site.
+
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and leave it running. The whale icon should be steady, not spinning forever.
+2. Install [Node.js 20 or newer](https://nodejs.org/). Open Terminal (Mac) or Command Prompt (Windows) and type `node -v`. You should see a version starting with `v20` or higher.
+3. Install the [Supabase CLI](https://supabase.com/docs/guides/cli).
+4. Install **Expo Go** on your phone from the App Store or Play Store. The phone and the computer must be on the same Wi‑Fi.
+
+Then, in Terminal:
+
+```bash
+git clone https://github.com/UpstairsBananaMan/Heft-.git
+cd Heft-
+npm install
+supabase start
+```
+
+The first `supabase start` downloads a local database and can take several minutes. When it finishes:
+
+```bash
+supabase status
+```
+
+Copy the **API URL** and the **anon key**. Leave Google and Stripe blank. Quotes, publish, accept, and complete still work. Those runs say sandbox and do not charge a card.
+
+Create two files. Do not commit them.
+
+- Copy `apps/mobile/.env.example` to `apps/mobile/.env`
+- Copy `apps/admin/.env.example` to `apps/admin/.env.local`
+
+Paste the API URL and anon key into both. On a phone, `127.0.0.1` is the phone itself, so replace it in the mobile URL with your computer’s Wi‑Fi address (Mac: System Settings → Network). Example: `http://192.168.1.20:54321`.
+
+Open two Terminal windows from the `Heft-` folder:
+
+```bash
+npm run admin
+```
+
+In a browser, open http://localhost:3000
+
+```bash
+npm run mobile
+```
+
+A QR code appears. Android: scan it with Expo Go. iPhone: scan it with the Camera app, then open in Expo Go.
+
+### What you tap
+
+1. In Expo Go, sign up as a **customer** with any email and password you invent. Tap **New**, pick two Pensacola stops (skip the one labeled outside the service box), describe the load, tap **Get quote**, then **Authorize hold and publish**. You should see a sandbox notice.
+2. Sign out. Sign up again and choose **Driver**. Save a vehicle, keep the Pensacola center, and use a 25 mile radius.
+3. On the computer, sign in at http://localhost:3000 as `admin@heft.local` / `heft-admin-seed`. Open **Drivers** and tap **Approve**. A line appears saying the driver was approved.
+4. Back in Expo Go, sign in as the driver. Tap **Go online**. The job shows on the list. Tap **Accept**.
+5. Tap the status button for each step (en route, at pickup, en route to drop-off, at drop-off). At drop-off, tap **Take photo** or **Choose from library**. Then **Mark delivered**, then **Complete and record payout**.
+6. **Earnings** shows a pending payout. Admin **Dashboard** and **Revenue** show the platform fee from that job. A `$0.00` means no paid job exists yet.
+
+If `supabase start` says Docker is not running, open Docker Desktop and run the command again. To wipe local data and re-seed the admin user: `supabase db reset`.
+
 ```
 amount = max(min_cents, base_cents + per_mile_cents * miles) * size_multiplier * vehicle_mult
 ```

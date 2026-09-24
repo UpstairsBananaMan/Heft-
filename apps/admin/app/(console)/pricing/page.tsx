@@ -1,4 +1,5 @@
 import { SIZE_LABEL, VEHICLE_LABEL } from "@heft/shared";
+import { Flash } from "@/components/flash";
 import { updatePricingRule } from "@/lib/actions";
 import { requireAdmin } from "@/lib/auth";
 
@@ -6,9 +7,10 @@ function dollars(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
-export default async function PricingPage() {
+export default async function PricingPage({ searchParams }: { searchParams: Promise<{ notice?: string }> }) {
   const gate = await requireAdmin();
   if (!gate.configured) return null;
+  const { notice } = await searchParams;
   const { data: rules } = await gate.supabase
     .from("pricing_rules")
     .select("*")
@@ -22,6 +24,7 @@ export default async function PricingPage() {
         Seeded Pensacola defaults. These rows are configuration, not revenue. Edits apply to the next quote. Amounts
         are dollars; the database stores cents.
       </p>
+      <Flash notice={notice} />
       <ul className="mt-6 space-y-4">
         {(rules ?? []).map((rule) => (
           <li key={rule.id} className="border border-line bg-white p-5">

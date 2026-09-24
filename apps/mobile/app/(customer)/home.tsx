@@ -1,9 +1,10 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { formatUsd, type Job } from "@heft/shared";
-import { BottomNav, Screen, StatusPill } from "../../src/components/ui";
+import { BottomNav, Button, EmptyState, Screen, StatusPill } from "../../src/components/ui";
 import { supabase } from "../../src/lib/supabase";
+import { toast } from "../../src/store/toast";
 
 const NAV = [
   { href: "/(customer)/home" as const, label: "Jobs" },
@@ -22,15 +23,27 @@ export default function CustomerHome() {
     },
   });
 
+  const rows = jobs.data ?? [];
+  const failed = jobs.error ? (jobs.error as Error).message : "";
+
   return (
-    <Screen
-      title="Your jobs"
-      footer={<BottomNav items={NAV} />}
-    >
-      <Pressable onPress={() => jobs.refetch()} className="mb-4 self-start">
+    <Screen title="Your jobs" footer={<BottomNav items={NAV} />}>
+      <Pressable
+        onPress={() => {
+          void jobs.refetch().catch((err: Error) => toast(err.message));
+        }}
+        className="mb-4 self-start"
+      >
         <Text className="text-xs font-semibold uppercase tracking-wider text-steel">Refresh</Text>
       </Pressable>
-      {(jobs.data ?? []).map((job) => (
+      {failed ? <EmptyState title="Could not load jobs" body={failed} /> : null}
+      {!failed && jobs.isSuccess && rows.length === 0 ? (
+        <>
+          <EmptyState title="No jobs yet" body="Post a pickup and drop-off. You will see a price before anyone is dispatched." />
+          <Button label="New request" onPress={() => router.push("/(customer)/new")} />
+        </>
+      ) : null}
+      {rows.map((job) => (
         <Pressable
           key={job.id}
           onPress={() => router.push(`/(customer)/job/${job.id}`)}
@@ -44,9 +57,6 @@ export default function CustomerHome() {
           <Text className="mt-2 font-mono text-sm text-charcoal">{formatUsd(job.final_cents ?? job.estimate_cents)}</Text>
         </Pressable>
       ))}
-      {jobs.data?.length === 0 ? <Text className="text-sm text-steel">No jobs yet. Post a request.</Text> : null}
-      {jobs.error ? <Text className="text-sm text-charcoal">{(jobs.error as Error).message}</Text> : null}
-      <View className="h-4" />
     </Screen>
   );
 }

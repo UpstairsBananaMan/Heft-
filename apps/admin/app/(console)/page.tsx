@@ -39,6 +39,7 @@ export default async function DashboardPage() {
     .from("disputes")
     .select("id", { count: "exact", head: true })
     .in("status", ["open", "investigating"]);
+  const openJobs = counts.find(([status]) => status === "open")?.[1] ?? 0;
 
   return (
     <main>
@@ -49,7 +50,14 @@ export default async function DashboardPage() {
           Counts and revenue are read from this database. There is no sample traffic. A zero means no matching rows.
         </p>
       </header>
-      <section className="mt-8 grid gap-4 sm:grid-cols-3">
+      <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <article className="border border-line bg-white p-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-steel">Open jobs</p>
+          <p className="mt-3 font-mono text-3xl">{openJobs}</p>
+          <Link href="/jobs" className="mt-2 inline-block text-xs font-semibold text-charcoal underline">
+            View jobs
+          </Link>
+        </article>
         <article className="border border-line bg-white p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-steel">Platform revenue today</p>
           <p className="mt-3 font-mono text-3xl">{formatUsd(todayFee)}</p>
@@ -59,6 +67,9 @@ export default async function DashboardPage() {
           <p className="text-xs font-semibold uppercase tracking-wider text-steel">Drivers awaiting approval</p>
           <p className="mt-3 font-mono text-3xl">{pendingDrivers ?? 0}</p>
           <p className="mt-2 text-xs text-steel">{driverCount ?? 0} driver profiles total.</p>
+          <Link href="/drivers" className="mt-2 inline-block text-xs font-semibold text-charcoal underline">
+            Review drivers
+          </Link>
         </article>
         <article className="border border-line bg-white p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-steel">Open disputes</p>

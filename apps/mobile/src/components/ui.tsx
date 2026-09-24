@@ -145,6 +145,33 @@ export function Notice({ children }: { children: ReactNode }) {
   );
 }
 
+export function Steps({ labels, current }: { labels: string[]; current: number }) {
+  return (
+    <View className="mb-5 flex-row flex-wrap">
+      {labels.map((label, index) => {
+        const reached = index <= current;
+        return (
+          <View key={label} className="mb-2 mr-4">
+            <Text className={`text-[11px] font-semibold uppercase tracking-wider ${reached ? "text-charcoal" : "text-steel"}`}>
+              {index + 1} {label}
+            </Text>
+            <View className={`mt-1 h-1 w-14 ${reached ? "bg-amber" : "bg-line"}`} />
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+export function EmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <View className="border border-line bg-white px-4 py-6">
+      <Text className="text-lg font-semibold text-charcoal">{title}</Text>
+      <Text className="mt-2 text-sm leading-5 text-steel">{body}</Text>
+    </View>
+  );
+}
+
 export function ErrorText({ children }: { children: string }) {
   return <Text className="mb-3 text-sm text-charcoal">{children}</Text>;
 }

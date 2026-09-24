@@ -24,9 +24,14 @@ export async function setDriverStatus(formData: FormData) {
   if (!gate.configured) return;
   const userId = String(formData.get("user_id") ?? "");
   const status = String(formData.get("status") ?? "");
-  if (!userId || !["pending", "approved", "suspended"].includes(status)) return;
-  await gate.supabase.from("driver_profiles").update({ status }).eq("user_id", userId);
+  if (!userId || !["pending", "approved", "suspended"].includes(status)) {
+    redirect("/drivers?notice=invalid");
+  }
+  const { error } = await gate.supabase.from("driver_profiles").update({ status }).eq("user_id", userId);
+  if (error) redirect("/drivers?notice=error");
   revalidatePath("/drivers");
+  revalidatePath("/");
+  redirect(`/drivers?notice=${status}`);
 }
 
 export async function updatePricingRule(formData: FormData) {
@@ -37,8 +42,10 @@ export async function updatePricingRule(formData: FormData) {
   const perMile = cents(formData.get("per_mile_dollars"));
   const min = cents(formData.get("min_dollars"));
   const size = Number(String(formData.get("size_multiplier") ?? ""));
-  if (!id || base == null || perMile == null || min == null || !Number.isFinite(size) || size <= 0) return;
-  await gate.supabase
+  if (!id || base == null || perMile == null || min == null || !Number.isFinite(size) || size <= 0) {
+    redirect("/pricing?notice=invalid");
+  }
+  const { error } = await gate.supabase
     .from("pricing_rules")
     .update({
       base_cents: base,
@@ -48,7 +55,9 @@ export async function updatePricingRule(formData: FormData) {
       active: formData.get("active") === "on",
     })
     .eq("id", id);
+  if (error) redirect("/pricing?notice=error");
   revalidatePath("/pricing");
+  redirect("/pricing?notice=saved");
 }
 
 export async function resolveDispute(formData: FormData) {

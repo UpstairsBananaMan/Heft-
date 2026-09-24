@@ -1,10 +1,12 @@
 import { VEHICLE_LABEL } from "@heft/shared";
+import { Flash } from "@/components/flash";
 import { setDriverStatus } from "@/lib/actions";
 import { requireAdmin } from "@/lib/auth";
 
-export default async function DriversPage() {
+export default async function DriversPage({ searchParams }: { searchParams: Promise<{ notice?: string }> }) {
   const gate = await requireAdmin();
   if (!gate.configured) return null;
+  const { notice } = await searchParams;
   const { data: drivers } = await gate.supabase
     .from("driver_profiles")
     .select("*, users(display_name, phone)")
@@ -16,6 +18,7 @@ export default async function DriversPage() {
       <p className="mt-2 max-w-2xl text-sm text-steel">
         New drivers stay pending until you approve them. Only approved, online drivers can see and accept open jobs.
       </p>
+      <Flash notice={notice} />
       <ul className="mt-6 space-y-4">
         {(drivers ?? []).map((driver) => {
           const user = Array.isArray(driver.users) ? driver.users[0] : driver.users;
