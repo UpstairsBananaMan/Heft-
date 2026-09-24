@@ -14,15 +14,15 @@ import {
   type JobEvent,
   type JobStatus,
 } from "@heft/shared";
-import { CancelBox, DisputeBox } from "../../../src/components/JobActions";
-import { Button, EmptyState, ErrorText, Notice, Screen, StatusPill } from "../../../src/components/ui";
-import { track } from "../../../src/lib/analytics";
-import { demoMode } from "../../../src/lib/supabase";
-import { errorText, invoke } from "../../../src/lib/invoke";
-import { uploadJobImage } from "../../../src/lib/photos";
-import { supabase } from "../../../src/lib/supabase";
-import { useSession } from "../../../src/store/session";
-import { toast } from "../../../src/store/toast";
+import { CancelBox, DisputeBox } from "../components/JobActions";
+import { Button, EmptyState, ErrorText, Notice, Screen, StatusPill } from "../components/ui";
+import { track } from "../lib/analytics";
+import { demoMode } from "../lib/supabase";
+import { errorText, invoke } from "../lib/invoke";
+import { uploadJobImage } from "../lib/photos";
+import { supabase } from "../lib/supabase";
+import { useSession } from "../store/session";
+import { toast } from "../store/toast";
 
 const RAIL: { key: JobStatus; label: string }[] = [
   { key: "assigned", label: "Assigned" },
@@ -326,7 +326,7 @@ export default function DriverJob() {
                 />
               ) : null}
               {row.status === "paid" ? (
-                <Button label="Rate customer" onPress={() => router.push(`/(driver)/rate/${row.id}`)} />
+                <Button label="Rate customer" onPress={() => router.push(`/rate/${row.id}`)} />
               ) : null}
             </>
           ) : null}

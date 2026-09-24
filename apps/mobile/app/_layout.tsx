@@ -30,7 +30,7 @@ export default function RootLayout() {
         const jobId = data?.job_id;
         if (!jobId) return;
         const role = useSession.getState().profile?.role;
-        router.push(role === "driver" ? `/(driver)/job/${jobId}` : `/(customer)/job/${jobId}`);
+        router.push(`/job/${jobId}`);
       });
     } catch {
       opened = undefined;

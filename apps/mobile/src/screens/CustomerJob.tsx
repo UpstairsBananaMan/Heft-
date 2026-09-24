@@ -3,11 +3,11 @@ import { Linking, Platform, Text } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { formatUsd, loadFailureCopy, type DriverProfile, type Job, type JobEvent } from "@heft/shared";
-import { JobMap } from "../../../src/components/JobMap";
-import { CancelBox, DisputeBox } from "../../../src/components/JobActions";
-import { Button, EmptyState, Notice, Screen, StatusPill } from "../../../src/components/ui";
-import { supabase } from "../../../src/lib/supabase";
-import { useSession } from "../../../src/store/session";
+import { JobMap } from "../components/JobMap";
+import { CancelBox, DisputeBox } from "../components/JobActions";
+import { Button, EmptyState, Notice, Screen, StatusPill } from "../components/ui";
+import { supabase } from "../lib/supabase";
+import { useSession } from "../store/session";
 
 export default function CustomerJob() {
   const { id, sandbox } = useLocalSearchParams<{ id: string; sandbox?: string }>();
@@ -126,7 +126,7 @@ export default function CustomerJob() {
           ) : null}
           <Button label="Open pickup in maps" tone="ghost" onPress={() => openMap(row.pickup_lat, row.pickup_lng)} />
           {row.status === "paid" && profile ? (
-            <Button label="Rate driver" onPress={() => router.push(`/(customer)/rate/${row.id}`)} />
+            <Button label="Rate driver" onPress={() => router.push(`/rate/${row.id}`)} />
           ) : null}
           {profile ? (
             <>

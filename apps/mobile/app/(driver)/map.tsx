@@ -77,7 +77,7 @@ export default function DriverMap() {
       await queryClient.invalidateQueries({ queryKey: ["open-jobs"] });
       track({ name: "job_accepted" });
       toast("Job accepted. Start toward pickup.", "ok");
-      router.push(`/(driver)/job/${jobId}`);
+      router.push(`/job/${jobId}`);
     } catch (err) {
       toast(errorText(err));
     } finally {
@@ -137,7 +137,7 @@ export default function DriverMap() {
               lat: job.pickup_lat,
               lng: job.pickup_lng,
               title: job.item_description,
-              onPress: () => router.push(`/(driver)/job/${job.id}`),
+              onPress: () => router.push(`/job/${job.id}`),
             }))}
           />
         </View>
@@ -149,7 +149,7 @@ export default function DriverMap() {
       ) : null}
       {openJobs.map((job) => (
         <View key={job.id} className="mb-3 border border-line bg-white p-4">
-          <Pressable onPress={() => router.push(`/(driver)/job/${job.id}`)}>
+          <Pressable onPress={() => router.push(`/job/${job.id}`)}>
             <Text className="text-base font-semibold text-charcoal">{job.item_description}</Text>
             <Text className="mt-1 text-sm text-steel">{job.pickup_address}</Text>
             <Text className="mt-1 text-sm text-steel">→ {job.dropoff_address}</Text>

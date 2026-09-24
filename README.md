@@ -37,6 +37,15 @@ While both are running, a job published on the phone shows up on the website. Th
 
 `npm run demo` is a different command. That one still needs local Supabase and loads a smaller SQL sample.
 
+A static copy of the phone site, for a host that is not your laptop:
+
+```bash
+cd apps/mobile
+EXPO_PUBLIC_DEMO_MODE=1 npx expo export --platform web --output-dir dist
+```
+
+Serve the `dist` folder. It still needs no accounts. If the admin site is not running, the phone keeps its sample data in that browser.
+
 ## What Dominick must buy/unlock
 
 You can try Heft on your own computer with no accounts. A public release needs the accounts below. Create them yourself. Do not paste secret keys into GitHub.

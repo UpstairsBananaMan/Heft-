@@ -32,7 +32,7 @@ export default function QuoteConfirm() {
       await queryClient.invalidateQueries({ queryKey: ["my-jobs"] });
       track({ name: "job_published", sandbox: Boolean(result.sandbox) });
       toast(result.sandbox ? "Published with a sandbox payment hold." : "Hold authorized. Job is open.", "ok");
-      router.replace(`/(customer)/job/${id}?sandbox=${result.sandbox ? "1" : "0"}`);
+      router.replace(`/job/${id}?sandbox=${result.sandbox ? "1" : "0"}`);
     } catch (err) {
       toast(errorText(err));
     } finally {

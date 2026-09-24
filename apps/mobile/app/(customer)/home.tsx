@@ -47,7 +47,7 @@ export default function CustomerHome() {
       {rows.map((job) => (
         <Pressable
           key={job.id}
-          onPress={() => router.push(`/(customer)/job/${job.id}`)}
+          onPress={() => router.push(`/job/${job.id}`)}
           className="mb-3 border border-line bg-white p-4"
         >
           <StatusPill status={job.status} />
