@@ -59,10 +59,10 @@ export function createDemoState(now = new Date().toISOString()): DemoState {
 
   return {
     users: [
-      user(DEMO_IDS.admin, "admin", "Demo Admin", "8505550100", now),
-      user(DEMO_IDS.customer, "customer", "Demo Customer", "8505550101", now),
-      user(DEMO_IDS.driver, "driver", "Demo Driver", "8505550102", now),
-      user(DEMO_IDS.pendingDriver, "driver", "Demo Pending Driver", "8505550103", now),
+      user(DEMO_IDS.admin, "admin", "Dominick", "8505550100", now),
+      user(DEMO_IDS.customer, "customer", "Dana R.", "8505550101", now),
+      user(DEMO_IDS.driver, "driver", "Marcus T.", "8505550102", now),
+      user(DEMO_IDS.pendingDriver, "driver", "Tanya B.", "8505550103", now),
     ],
     customer_profiles: [
       {
@@ -87,6 +87,11 @@ export function createDemoState(now = new Date().toISOString()): DemoState {
         stripe_connect_account_id: null,
         rating_avg: 5,
         rating_count: 2,
+        plate: "QXT 482",
+        vehicle_make: "Ford",
+        vehicle_model: "F-150",
+        vehicle_color: "Silver",
+        service_zip: "32502",
         is_online: true,
         current_lat: 30.4213,
         current_lng: -87.2169,
@@ -104,6 +109,11 @@ export function createDemoState(now = new Date().toISOString()): DemoState {
         stripe_connect_account_id: null,
         rating_avg: 0,
         rating_count: 0,
+        plate: null,
+        vehicle_make: "Ram",
+        vehicle_model: "ProMaster",
+        vehicle_color: "White",
+        service_zip: "32503",
         is_online: false,
         current_lat: null,
         current_lng: null,
@@ -111,12 +121,12 @@ export function createDemoState(now = new Date().toISOString()): DemoState {
       },
     ],
     jobs: [
-      job(DEMO_IDS.openJob, "open", "Demo — dresser, waiting for a driver", 30.4088, -87.2166, "21 E Government St, Pensacola, FL", 30.4758, -87.208, "5100 N 9th Ave, Pensacola, FL", null, 7000, now),
-      job(DEMO_IDS.activeJob, "en_route_pickup", "Demo — lumber bundle, driver on the way", 30.436, -87.191, "1200 E Gadsden St, Pensacola, FL", 30.4733, -87.1867, "2430 Airport Blvd, Pensacola, FL", DEMO_IDS.driver, 8200, now),
-      job(DEMO_IDS.dropoffJob, "at_dropoff", "Demo — fridge at the drop-off", 30.421, -87.283, "4100 W Fairfield Dr, Pensacola, FL", 30.4088, -87.2166, "21 E Government St, Pensacola, FL", DEMO_IDS.driver, 9600, now),
-      job(DEMO_IDS.paidTable, "paid", "Demo — dining table, paid sample", 30.4088, -87.2166, "21 E Government St, Pensacola, FL", 30.436, -87.191, "1200 E Gadsden St, Pensacola, FL", DEMO_IDS.driver, 7000, now),
-      job(DEMO_IDS.paidMattress, "paid", "Demo — mattress, paid sample", 30.4758, -87.208, "5100 N 9th Ave, Pensacola, FL", 30.421, -87.283, "4100 W Fairfield Dr, Pensacola, FL", DEMO_IDS.driver, 12000, now),
-      job(DEMO_IDS.disputedJob, "disputed", "Demo — bookshelf, open dispute", 30.4733, -87.1867, "2430 Airport Blvd, Pensacola, FL", 30.4088, -87.2166, "21 E Government St, Pensacola, FL", DEMO_IDS.driver, 8800, now),
+      job(DEMO_IDS.openJob, "open", "Dresser", 30.4088, -87.2166, "21 E Government St, Pensacola, FL", 30.4758, -87.208, "5100 N 9th Ave, Pensacola, FL", null, 7000, now, "furniture"),
+      job(DEMO_IDS.activeJob, "en_route_pickup", "Couch", 30.436, -87.191, "1200 E Gadsden St, Pensacola, FL", 30.4758, -87.208, "5100 N 9th Ave, Pensacola, FL", DEMO_IDS.driver, 10200, now, "couch"),
+      job(DEMO_IDS.dropoffJob, "at_dropoff", "Fridge", 30.421, -87.283, "4100 W Fairfield Dr, Pensacola, FL", 30.4088, -87.2166, "21 E Government St, Pensacola, FL", DEMO_IDS.driver, 9600, now, "appliance"),
+      job(DEMO_IDS.paidTable, "paid", "Dining table", 30.4088, -87.2166, "21 E Government St, Pensacola, FL", 30.436, -87.191, "1200 E Gadsden St, Pensacola, FL", DEMO_IDS.driver, 7000, now, "furniture"),
+      job(DEMO_IDS.paidMattress, "paid", "Mattress", 30.4758, -87.208, "5100 N 9th Ave, Pensacola, FL", 30.421, -87.283, "4100 W Fairfield Dr, Pensacola, FL", DEMO_IDS.driver, 12000, now, "mattress"),
+      job(DEMO_IDS.disputedJob, "disputed", "Bookshelf", 30.4733, -87.1867, "2430 Airport Blvd, Pensacola, FL", 30.4088, -87.2166, "21 E Government St, Pensacola, FL", DEMO_IDS.driver, 8800, now, "furniture"),
     ],
     job_events: [
       event("ev-open", DEMO_IDS.openJob, "open", DEMO_IDS.customer, now, { seed: "demo" }),
@@ -132,7 +142,7 @@ export function createDemoState(now = new Date().toISOString()): DemoState {
         id: DEMO_IDS.dispute,
         job_id: DEMO_IDS.disputedJob,
         opened_by: DEMO_IDS.customer,
-        reason: "Demo dispute — the bookshelf arrived with a cracked shelf. Sample only.",
+        reason: "The drop-off didn't match what was booked.",
         status: "open",
         resolution_notes: null,
         resolved_by: null,
@@ -147,6 +157,26 @@ export function createDemoState(now = new Date().toISOString()): DemoState {
     pricing_rules: rules,
     ratings: [],
     device_tokens: [],
+    driver_documents: [
+      doc("doc-lic", DEMO_IDS.driver, "license", "approved", now),
+      doc("doc-ins", DEMO_IDS.driver, "insurance", "approved", now),
+      doc("doc-photo", DEMO_IDS.driver, "vehicle_photo", "approved", now),
+      doc("doc-tanya-lic", DEMO_IDS.pendingDriver, "license", "in_review", now),
+    ],
+  };
+}
+
+function doc(id: string, driverId: string, kind: string, status: string, now: string) {
+  return {
+    id,
+    driver_id: driverId,
+    kind,
+    storage_path: `${driverId}/${kind}.jpg`,
+    status,
+    note: null,
+    created_at: now,
+    reviewed_at: status === "approved" ? now : null,
+    reviewed_by: status === "approved" ? DEMO_IDS.admin : null,
   };
 }
 
@@ -163,6 +193,7 @@ function job(
   driverId: string | null,
   cents: number,
   now: string,
+  itemType = "furniture",
 ) {
   const fee = Math.round(cents * 0.15);
   return {
@@ -173,14 +204,20 @@ function job(
     pickup_address: pickup,
     pickup_lat: pickupLat,
     pickup_lng: pickupLng,
-    pickup_notes: null,
+    pickup_notes: item === "Couch" ? "Gate code 4412" : null,
     dropoff_address: dropoff,
     dropoff_lat: dropLat,
     dropoff_lng: dropLng,
     dropoff_notes: null,
     item_description: item,
-    size_category: "medium",
-    vehicle_required: "pickup",
+    item_type: itemType,
+    size_category: itemType === "couch" ? "large" : "medium",
+    vehicle_required: itemType === "couch" ? "cargo_van" : "pickup",
+    stairs_pickup_flights: itemType === "couch" ? 1 : 0,
+    stairs_dropoff_flights: 0,
+    needs_helper: false,
+    dropoff_placement: "inside",
+    quote_lines: null,
     distance_miles: 4.5,
     estimate_cents: cents,
     final_cents: cents,

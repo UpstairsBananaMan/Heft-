@@ -2,6 +2,7 @@ import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { APP_NAME } from "@heft/shared";
 import { supabase } from "./supabase";
 
 Notifications.setNotificationHandler({
@@ -30,7 +31,7 @@ export async function registerForJobAlerts(userId: string): Promise<{ ok: true }
     return {
       ok: false,
       message:
-        "Job alerts turn on after an Expo project id is set. Run eas init, or set EXPO_PUBLIC_EAS_PROJECT_ID. Heft still works without alerts.",
+        `Job alerts turn on after an Expo project id is set. Run eas init, or set EXPO_PUBLIC_EAS_PROJECT_ID. ${APP_NAME} still works without alerts.`,
     };
   }
   if (Platform.OS !== "ios" && Platform.OS !== "android") {
@@ -42,7 +43,7 @@ export async function registerForJobAlerts(userId: string): Promise<{ ok: true }
   const current = await Notifications.getPermissionsAsync();
   const granted = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
   if (granted.status !== "granted") {
-    return { ok: false, message: "Notification permission was denied. Heft still works without alerts." };
+    return { ok: false, message: `Notification permission was denied. ${APP_NAME} still works without alerts.` };
   }
   const token = await Notifications.getExpoPushTokenAsync({ projectId });
   const { error } = await supabase.from("device_tokens").upsert(

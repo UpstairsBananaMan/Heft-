@@ -38,7 +38,7 @@ export type DisputeStatus = (typeof DISPUTE_STATUSES)[number];
 export const PAYOUT_STATUSES = ["pending", "paid", "failed"] as const;
 export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
 
-export const PHOTO_KINDS = ["item", "pod"] as const;
+export const PHOTO_KINDS = ["item", "pickup", "pod"] as const;
 export type PhotoKind = (typeof PHOTO_KINDS)[number];
 
 export interface User {
@@ -70,6 +70,11 @@ export interface DriverProfile {
   service_lat: number;
   service_lng: number;
   service_radius_miles: number | string;
+  plate: string | null;
+  vehicle_make: string | null;
+  vehicle_model: string | null;
+  vehicle_color: string | null;
+  service_zip: string | null;
   stripe_connect_account_id: string | null;
   rating_avg: number | string;
   rating_count: number;
@@ -93,8 +98,14 @@ export interface Job {
   dropoff_lng: number;
   dropoff_notes: string | null;
   item_description: string;
+  item_type: string | null;
   size_category: SizeCategory;
   vehicle_required: VehicleType;
+  stairs_pickup_flights: number;
+  stairs_dropoff_flights: number;
+  needs_helper: boolean;
+  dropoff_placement: "inside" | "curbside";
+  quote_lines: { key: string; label: string; cents: number }[] | null;
   distance_miles: number | string | null;
   estimate_cents: number | null;
   final_cents: number | null;

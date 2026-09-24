@@ -8,6 +8,10 @@ import { requireUser } from "../_shared/supabase.ts";
 serveJson(async (req) => {
   if (req.method !== "POST") return json({ error: "POST required" }, 405);
   const { admin, user } = await requireUser(req);
+  const phone = user.phone || (typeof user.user_metadata?.phone === "string" ? user.user_metadata.phone : "");
+  if (user.is_anonymous || !user.email || !phone) {
+    throw new HttpError(403, "Add your name, email, and phone before booking");
+  }
   const body = await readJson(req);
   const jobId = String(body.job_id ?? "");
   if (!jobId) throw new HttpError(400, "job_id is required");

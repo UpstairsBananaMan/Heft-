@@ -14,7 +14,7 @@ export async function requireAdmin(): Promise<
   if (!supabaseConfigured()) return { configured: false };
   if (demoModeEnabled()) {
     const supabase = await createClient();
-    return { configured: true, supabase, user: { id: "a0000000-0000-4000-8000-000000000001" } as User, displayName: "Demo Admin" };
+    return { configured: true, supabase, user: { id: "a0000000-0000-4000-8000-000000000001" } as User, displayName: "Dominick" };
   }
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();

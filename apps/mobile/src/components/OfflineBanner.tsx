@@ -1,4 +1,5 @@
 import { Text, View } from "react-native";
+import { APP_NAME } from "@heft/shared";
 import { useOnline } from "../lib/reachability";
 
 export function OfflineBanner() {
@@ -18,7 +19,7 @@ export function OfflineBanner() {
       }}
     >
       <Text style={{ color: "#F4F1EA", fontSize: 13, lineHeight: 18 }}>
-        Offline. Heft will keep trying. Tap Refresh after Wi-Fi is back. Nothing new is sent until then.
+        You're offline. {APP_NAME} will keep trying. You can start a booking when you're back online.
       </Text>
     </View>
   );

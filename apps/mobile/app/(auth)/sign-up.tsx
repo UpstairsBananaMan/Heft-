@@ -51,7 +51,7 @@ export default function SignUp() {
       });
       if (signError) throw signError;
       if (!data.session) {
-        setError("Check email to confirm the account, then sign in. The link opens Heft.");
+        setError("Check email to confirm the account, then sign in. The link opens the app.");
         return;
       }
       await refreshProfile();

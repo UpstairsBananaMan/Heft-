@@ -16,17 +16,42 @@ export const STATUS_LABEL: Record<JobStatus, string> = {
 };
 
 export const VEHICLE_LABEL: Record<string, string> = {
-  pickup: "Pickup",
+  pickup: "Pickup truck",
   cargo_van: "Cargo van",
   box_truck: "Box truck",
   flatbed: "Flatbed",
+};
+
+/** Words a customer sees. Admin keeps STATUS_LABEL. */
+export const CUSTOMER_STATUS: Record<JobStatus, string> = {
+  draft: "Not booked yet",
+  priced: "Your price is ready",
+  open: "Finding your driver",
+  assigned: "Driver confirmed",
+  en_route_pickup: "Driver is on the way",
+  at_pickup: "Driver is at pickup",
+  en_route_dropoff: "On the way to you",
+  at_dropoff: "Driver has arrived",
+  delivered: "Delivered",
+  paid: "Done, receipt ready",
+  cancelled: "Cancelled",
+  disputed: "We're looking into it",
+};
+
+/** The button that moves a job into this status. */
+export const DRIVER_ACTION: Partial<Record<JobStatus, string>> = {
+  en_route_pickup: "Start driving to pickup",
+  at_pickup: "I'm at pickup",
+  en_route_dropoff: "Loaded, start drop-off",
+  at_dropoff: "I'm at drop-off",
+  paid: "Finish delivery",
 };
 
 export const SIZE_LABEL: Record<string, string> = {
   small: "Small",
   medium: "Medium",
   large: "Large",
-  xl: "XL",
+  xl: "Extra large",
 };
 
 /** Driver-operated forward steps. delivered → paid is complete-job, not this map. */
@@ -55,14 +80,11 @@ export function canCancel(status: JobStatus, role: Role): boolean {
 /** Copy for the cancel control. Null when this role cannot cancel. */
 export function cancelHint(status: JobStatus, role: Role): string | null {
   if (!canCancel(status, role)) return null;
-  if (role === "customer" && (status === "draft" || status === "priced" || status === "open")) {
-    return "No driver has accepted yet. Cancelling ends the request and releases a sandbox hold.";
-  }
   if (role === "customer") {
-    return "A driver is assigned. You can cancel until they mark at pickup. The job ends. It does not go back on the map.";
+    return "You can cancel for free until your driver arrives at pickup.";
   }
   if (role === "driver") {
-    return "You can cancel while assigned or en route to pickup. The job ends for you and the customer.";
+    return "You can cancel until you reach pickup. Cancelling often can pause your account.";
   }
   return "Cancelling ends the job.";
 }
@@ -71,10 +93,10 @@ export function cancelHint(status: JobStatus, role: Role): string | null {
 export function disputeBlockedReason(status: JobStatus, paidAt: string | null, now = Date.now()): string | null {
   if (canOpenDispute(status, paidAt, now)) return null;
   if (status === "draft" || status === "priced" || status === "open") {
-    return "You can open a dispute after a driver accepts.";
+    return "You can report a problem after a driver accepts.";
   }
   if (status === "cancelled") return "Cancelled jobs cannot be disputed.";
-  if (status === "disputed") return "A dispute is already open. Dispatch reviews it in the admin console.";
+  if (status === "disputed") return "We're looking into it.";
   if (status === "paid") return "The 72-hour window after payment has closed.";
   return "This job cannot be disputed.";
 }

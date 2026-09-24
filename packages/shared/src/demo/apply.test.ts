@@ -65,7 +65,12 @@ describe("demo backend", () => {
     const jobId = (inserted.data as { id: string }).id;
     const quoted = demo.apply({ kind: "invoke", name: "quote", body: { job_id: jobId }, actor: customer });
     assert.equal(quoted.error, null);
-    assert.ok((quoted.data as { estimate_cents: number }).estimate_cents > 0);
+    const quotedBody = quoted.data as { estimate_cents: number; lines: { cents: number }[]; total_cents: number };
+    assert.ok(quotedBody.estimate_cents > 0);
+    assert.equal(
+      quotedBody.lines.reduce((sum, line) => sum + line.cents, 0),
+      quotedBody.total_cents,
+    );
     const published = demo.apply({ kind: "invoke", name: "publish-job", body: { job_id: jobId }, actor: customer });
     assert.equal((published.data as { sandbox: boolean }).sandbox, true);
     const accepted = demo.apply({ kind: "invoke", name: "accept-job", body: { job_id: jobId }, actor: driver });
@@ -103,8 +108,8 @@ describe("demo backend", () => {
       actor: admin,
     });
     const first = (jobs.data as { customer: { display_name: string }; item_description: string }[])[0];
-    assert.equal(first.customer.display_name, "Demo Customer");
-    assert.match(first.item_description, /Demo/);
+    assert.equal(first.customer.display_name, "Dana R.");
+    assert.doesNotMatch(first.item_description, /Demo/);
     const paid = demo.apply({
       kind: "query",
       table: "jobs",

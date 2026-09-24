@@ -52,6 +52,40 @@ export function roundMiles(miles: number): number {
   return Math.round(miles * 100) / 100;
 }
 
+/** DEFAULT flat add-on when any stairs are declared. Not per flight. */
+export const STAIRS_ADDON_CENTS = 1500;
+/** DEFAULT flat add-on when the customer asks for a helper. */
+export const HELPER_ADDON_CENTS = 2000;
+
+export type QuoteLine = { key: "base_miles" | "size" | "stairs" | "helper"; label: string; cents: number };
+
+/** Line items always sum to total_cents. Placement never changes the price. */
+export function quoteLines(
+  rule: {
+    base_cents: number;
+    per_mile_cents: number;
+    min_cents: number;
+    size_multiplier: number | string;
+    vehicle_type: string;
+  },
+  miles: number,
+  options: { stairs?: boolean; helper?: boolean; vehicleLabel: string; sizeLabel: string },
+): { lines: QuoteLine[]; total_cents: number } {
+  const vehicleMult = VEHICLE_MULTIPLIERS[rule.vehicle_type] ?? 1;
+  const sizeMult = Number(rule.size_multiplier);
+  const raw = Math.max(rule.min_cents, rule.base_cents + rule.per_mile_cents * miles);
+  const base = Math.round(raw * vehicleMult);
+  const sized = Math.round(base * sizeMult);
+  const lines: QuoteLine[] = [
+    { key: "base_miles", label: `${options.vehicleLabel} · ${miles.toFixed(1)} mi`, cents: base },
+  ];
+  const sizeCents = sized - base;
+  if (sizeCents !== 0) lines.push({ key: "size", label: `${options.sizeLabel} item`, cents: sizeCents });
+  if (options.stairs) lines.push({ key: "stairs", label: "Stairs", cents: STAIRS_ADDON_CENTS });
+  if (options.helper) lines.push({ key: "helper", label: "Helper to load", cents: HELPER_ADDON_CENTS });
+  return { lines, total_cents: lines.reduce((sum, line) => sum + line.cents, 0) };
+}
+
 export function quoteCents(
   rule: {
     base_cents: number;

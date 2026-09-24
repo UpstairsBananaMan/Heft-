@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { APP_NAME, APP_WORDMARK } from "@heft/shared";
 import { requireAdmin } from "@/lib/auth";
 import { signOut } from "@/lib/actions";
 
@@ -17,34 +18,42 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   if (!gate.configured) {
     return (
       <main className="mx-auto max-w-xl px-6 py-20">
-        <p className="text-xs font-semibold tracking-[0.28em] text-amber">HEFT</p>
+        <p className="text-sm font-semibold tracking-[0.2em]">{APP_WORDMARK}</p>
         <h1 className="mt-4 text-3xl font-semibold">Admin is not configured</h1>
         <p className="mt-4 text-sm leading-6 text-steel">
-          Copy apps/admin/.env.example to apps/admin/.env.local and fill in the local Supabase URL and anon key from
-          supabase status.
+          Copy apps/admin/.env.example to apps/admin/.env.local and fill in the local Supabase URL and anon key.
         </p>
       </main>
     );
   }
 
+  const clock = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date());
+
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[240px_1fr]">
+    <div className="min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
       <aside className="flex flex-col bg-charcoal text-paper lg:min-h-screen">
-        <div className="px-6 py-7">
-          <p className="text-xs font-semibold tracking-[0.28em] text-amber">HEFT</p>
-          <p className="mt-2 text-sm text-paper/70">{gate.displayName}</p>
-          {process.env.NEXT_PUBLIC_DEMO_MODE === "1" ? (
-            <p className="mt-3 inline-block bg-amber px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-charcoal">Demo data</p>
-          ) : null}
+        <div className="px-5 py-6">
+          <p className="text-lg font-extrabold tracking-tight">
+            {APP_WORDMARK}
+            <span className="text-amber">.</span>
+          </p>
+          <p className="mt-1 text-sm text-paper/70">Ops console · Pensacola</p>
         </div>
-        <nav className="flex flex-1 flex-col">
+        <nav className="flex flex-1 flex-col gap-1 px-3">
           {LINKS.map(([href, label]) => (
-            <Link key={href} href={href} className="px-6 py-3 text-sm hover:bg-white/5">
+            <Link key={href} href={href} className="rounded-xl px-3 py-3 text-sm hover:bg-ink-800">
               {label}
             </Link>
           ))}
         </nav>
-        <div className="px-6 pb-2 text-xs text-paper/70">
+        <div className="px-5 pb-2 text-xs text-paper/70">
           <Link href="/legal/privacy" className="block py-1 underline">
             Privacy (draft)
           </Link>
@@ -52,13 +61,24 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
             Terms (draft)
           </Link>
         </div>
-        <form action={signOut} className="p-6">
-          <button type="submit" className="text-xs font-semibold uppercase tracking-wider text-paper/70">
-            Sign out
-          </button>
-        </form>
+        <div className="flex items-center justify-between px-5 py-4">
+          <p className="text-sm">{gate.displayName}</p>
+          <form action={signOut}>
+            <button type="submit" className="text-xs text-paper/70">
+              Sign out
+            </button>
+          </form>
+        </div>
       </aside>
-      <div className="min-w-0 px-6 py-8 lg:px-10">{children}</div>
+      <div className="min-w-0">
+        <header className="flex items-center justify-end gap-4 px-6 py-4 text-sm text-steel">
+          <span>
+            {clock} CT
+          </span>
+          <span className="font-semibold text-charcoal">{APP_NAME}</span>
+        </header>
+        <div className="px-6 pb-10 lg:px-8">{children}</div>
+      </div>
     </div>
   );
 }

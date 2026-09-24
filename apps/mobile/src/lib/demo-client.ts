@@ -113,6 +113,13 @@ export function createMobileDemo() {
         setDemoRole(options?.data?.role === "driver" ? "driver" : "customer");
         return { data: { session: { user: {} } }, error: null };
       },
+      async signInAnonymously() {
+        setDemoRole("customer");
+        return {
+          data: { user: { id: PEOPLE.customer.id, email: PEOPLE.customer.email }, session: { user: { id: PEOPLE.customer.id, email: PEOPLE.customer.email } } },
+          error: null,
+        };
+      },
       async signOut() {
         setDemoRole(null);
         return { error: null };

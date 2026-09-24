@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { routeMiles } from "../_shared/distance.ts";
 import { HttpError, json, readJson, serveJson } from "../_shared/http.ts";
-import { inPensacola, quoteCents, splitCents } from "../_shared/pricing.ts";
+import { inPensacola, quoteLines, splitCents } from "../_shared/pricing.ts";
 import { requireUser } from "../_shared/supabase.ts";
 
 const SIZES = new Set(["small", "medium", "large", "xl"]);
@@ -66,10 +66,41 @@ serveJson(async (req) => {
     .maybeSingle();
   if (ruleError || !rule) throw new HttpError(404, "No active pricing rule for this vehicle and size");
 
-  const estimate = quoteCents(rule, distance.miles);
+  const vehicleLabel: Record<string, string> = {
+    pickup: "Pickup truck",
+    cargo_van: "Cargo van",
+    box_truck: "Box truck",
+    flatbed: "Flatbed",
+  };
+  const sizeLabel: Record<string, string> = {
+    small: "Small",
+    medium: "Medium",
+    large: "Large",
+    xl: "Extra large",
+  };
+  let stairs = false;
+  let helper = false;
+  if (jobId) {
+    const { data: extras } = await admin
+      .from("jobs")
+      .select("stairs_pickup_flights, stairs_dropoff_flights, needs_helper")
+      .eq("id", jobId)
+      .maybeSingle();
+    stairs = Number(extras?.stairs_pickup_flights ?? 0) + Number(extras?.stairs_dropoff_flights ?? 0) > 0;
+    helper = extras?.needs_helper === true;
+  }
+  const breakdown = quoteLines(rule, distance.miles, {
+    stairs,
+    helper,
+    vehicleLabel: vehicleLabel[vehicle] ?? "Pickup truck",
+    sizeLabel: sizeLabel[size] ?? "Medium",
+  });
+  const estimate = breakdown.total_cents;
   const split = splitCents(estimate);
   const result = {
     estimate_cents: estimate,
+    total_cents: estimate,
+    lines: breakdown.lines,
     distance_miles: distance.miles,
     distance_source: distance.source,
     platform_fee_cents: split.platform_fee_cents,
@@ -88,6 +119,7 @@ serveJson(async (req) => {
         final_cents: estimate,
         platform_fee_cents: split.platform_fee_cents,
         driver_payout_cents: split.driver_payout_cents,
+        quote_lines: breakdown.lines,
       })
       .eq("id", jobId)
       .in("status", ["draft", "priced"])

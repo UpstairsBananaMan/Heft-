@@ -1,15 +1,18 @@
 import type { ExpoConfig } from "expo/config";
 
+const brand = require("../../packages/shared/brand.json") as { appName: string };
+const APP_NAME = brand.appName;
 const mapsKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 const config: ExpoConfig = {
-  name: "Heft",
+  name: APP_NAME,
   slug: "heft",
   scheme: "heft",
   version: "0.1.0",
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "light",
+  web: { name: APP_NAME, shortName: APP_NAME },
   newArchEnabled: true,
   splash: {
     image: "./assets/splash.png",
@@ -21,14 +24,14 @@ const config: ExpoConfig = {
     bundleIdentifier: "com.heft.app",
     config: mapsKey ? { googleMapsApiKey: mapsKey } : undefined,
     infoPlist: {
-      NSCameraUsageDescription: "Heft uses the camera for proof-of-delivery photos.",
-      NSPhotoLibraryUsageDescription: "Heft needs photos of the item and proof of delivery.",
-      NSLocationWhenInUseUsageDescription:
-        "Heft uses your location while a job is active so the customer can see the truck.",
+      NSCameraUsageDescription: `${APP_NAME} uses the camera for delivery photos.`,
+      NSPhotoLibraryUsageDescription: `${APP_NAME} needs photos of the item and the delivery.`,
+      NSLocationWhenInUseUsageDescription: `${APP_NAME} uses your location while a job is active so the customer can see the truck.`,
     },
   },
   android: {
     package: "com.heft.app",
+    softwareKeyboardLayoutMode: "resize",
     adaptiveIcon: {
       foregroundImage: "./assets/adaptive-icon.png",
       backgroundColor: "#1A1D21",
@@ -51,17 +54,17 @@ const config: ExpoConfig = {
     [
       "expo-location",
       {
-        locationWhenInUsePermission:
-          "Heft uses your location while a job is active so the customer can see the truck.",
+        locationWhenInUsePermission: `${APP_NAME} uses your location while a job is active so the customer can see the truck.`,
       },
     ],
     [
       "expo-image-picker",
       {
-        photosPermission: "Heft needs photos of the item and proof of delivery.",
-        cameraPermission: "Heft uses the camera for proof-of-delivery photos.",
+        photosPermission: `${APP_NAME} needs photos of the item and the delivery.`,
+        cameraPermission: `${APP_NAME} uses the camera for delivery photos.`,
       },
     ],
+    "expo-font",
     "expo-notifications",
     "expo-secure-store",
   ],
