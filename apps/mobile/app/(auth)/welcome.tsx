@@ -7,6 +7,7 @@ import { APP_NAME, driversApprovedLabel } from "@heft/shared";
 import { demoPerson, setDemoRole } from "../../src/lib/demo-client";
 import { demoMode, supabase, supabaseConfigured } from "../../src/lib/supabase";
 import { useSession } from "../../src/store/session";
+import { Illustration } from "../../src/components/Illustration";
 import { C, font, Wordmark } from "../../src/components/v2";
 
 export default function Welcome() {
@@ -42,7 +43,12 @@ export default function Welcome() {
   return (
     <View style={{ flex: 1, backgroundColor: C.paper }}>
       <View style={{ flex: 1.15, backgroundColor: C.ink, paddingHorizontal: 24, paddingTop: 64, paddingBottom: 28 }}>
-        <Wordmark size={30} />
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Wordmark size={30} />
+          <View accessible={false} style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: C.amber50, alignItems: "center", justifyContent: "center" }}>
+            <Illustration name="box-idle" width={56} height={56} />
+          </View>
+        </View>
         <View
           style={{
             alignSelf: "flex-start",

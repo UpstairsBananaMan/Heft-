@@ -46,6 +46,14 @@ export const PENSACOLA_PLACES: PlacePreset[] = [
   },
 ];
 
+/** Nearest hardware store inside the service area. A suggestion the customer confirms. */
+export const HARDWARE_SUGGESTION: PlacePreset = {
+  label: "Home Depot",
+  address: "500 E Nine Mile Rd, Pensacola, FL",
+  lat: 30.52,
+  lng: -87.22,
+};
+
 /** Local Pensacola matches. Google Places is used when a maps key is set. */
 export function filterPlaces(query: string, places: PlacePreset[] = PENSACOLA_PLACES): PlacePreset[] {
   const needle = query.trim().toLowerCase();

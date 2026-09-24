@@ -82,6 +82,7 @@ export interface DriverProfile {
   current_lat: number | null;
   current_lng: number | null;
   last_seen_at: string | null;
+  show_name_in_feed?: boolean;
 }
 
 export interface Job {
@@ -159,6 +160,7 @@ export interface Rating {
   to_user_id: string;
   stars: number;
   comment: string | null;
+  share_photos?: boolean;
   created_at: string;
 }
 

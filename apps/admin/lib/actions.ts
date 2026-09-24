@@ -84,6 +84,22 @@ export async function resolveDispute(formData: FormData) {
   redirect(`${returnTo}?notice=${status}`);
 }
 
+export async function reviewFeedPost(formData: FormData) {
+  const gate = await requireAdmin();
+  if (!gate.configured) return;
+  const id = String(formData.get("id") ?? "");
+  const jobId = String(formData.get("job_id") ?? "");
+  const status = String(formData.get("status") ?? "");
+  if (!id || !["approved", "rejected"].includes(status)) redirect(`/jobs/${jobId}?notice=invalid`);
+  const { error } = await gate.supabase
+    .from("feed_posts")
+    .update({ status, approved_by: status === "approved" ? gate.user.id : null })
+    .eq("id", id);
+  if (error) redirect(`/jobs/${jobId}?notice=error`);
+  revalidatePath(`/jobs/${jobId}`);
+  redirect(`/jobs/${jobId}?notice=feed-${status}`);
+}
+
 function safeNext(raw: string, fallback: string): string {
   const path = raw.split("?")[0];
   if (path === "/disputes" || /^\/jobs\/[0-9a-f-]{36}$/i.test(path)) return path;

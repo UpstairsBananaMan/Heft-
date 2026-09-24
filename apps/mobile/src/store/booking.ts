@@ -1,7 +1,8 @@
 import type { PlacePreset, QuoteLine, SizeCategory } from "@heft/shared";
 import { create } from "zustand";
 
-export type BookingStep = "home" | "item" | "price";
+export type BookingStep = "home" | "item" | "size" | "price";
+export type AddressNext = "item" | "size" | "price";
 
 type BookingState = {
   pickup: PlacePreset | null;
@@ -17,6 +18,9 @@ type BookingState = {
   notes: string;
   photos: string[];
   step: BookingStep;
+  presetItem: boolean;
+  suggestHardware: boolean;
+  skipAfterAddress: AddressNext;
   jobId: string | null;
   lines: QuoteLine[] | null;
   totalCents: number | null;
@@ -42,6 +46,9 @@ const empty = {
   notes: "",
   photos: [] as string[],
   step: "home" as BookingStep,
+  presetItem: false,
+  suggestHardware: false,
+  skipAfterAddress: "item" as AddressNext,
   jobId: null,
   lines: null,
   totalCents: null,

@@ -1,5 +1,6 @@
 import { ReactNode, useRef, useState } from "react";
 import { Platform, Pressable, Text, TextInput, View, type TextStyle, type ViewStyle } from "react-native";
+import { Check } from "lucide-react-native";
 import { APP_WORDMARK } from "@heft/shared";
 import { haptic } from "../lib/haptics";
 
@@ -121,7 +122,19 @@ export function OutlineButton({ label, onPress }: { label: string; onPress?: () 
   );
 }
 
-export function Sheet({ children, footer, tall }: { children: ReactNode; footer?: ReactNode; tall?: boolean }) {
+export function Sheet({
+  children,
+  footer,
+  tall,
+  height,
+  onHandle,
+}: {
+  children: ReactNode;
+  footer?: ReactNode;
+  tall?: boolean;
+  height?: number;
+  onHandle?: () => void;
+}) {
   return (
     <View
       style={{
@@ -131,15 +144,23 @@ export function Sheet({ children, footer, tall }: { children: ReactNode; footer?
         paddingHorizontal: 20,
         paddingTop: 10,
         paddingBottom: footer ? 12 : 8,
-        maxHeight: tall ? "86%" : "58%",
+        maxHeight: height ?? (tall ? "86%" : "58%"),
+        height,
         shadowColor: "#1A1D21",
         shadowOpacity: 0.14,
         shadowRadius: 24,
         shadowOffset: { width: 0, height: -6 },
         elevation: 16,
+        overflow: "hidden",
       }}
     >
-      <View style={{ alignSelf: "center", width: 40, height: 5, borderRadius: 3, backgroundColor: C.sand300, marginBottom: 12 }} />
+      <Pressable
+        accessibilityLabel="Drag the sheet"
+        onPress={onHandle}
+        style={{ alignSelf: "center", width: 64, height: 24, alignItems: "center", justifyContent: "center", marginBottom: 4 }}
+      >
+        <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: C.sand300 }} />
+      </Pressable>
       {children}
       {footer}
     </View>
@@ -214,11 +235,17 @@ export function HoldToAccept({ onAccept }: { onAccept: () => void | Promise<void
       if (next >= 1 && !done.current) {
         done.current = true;
         clear();
-        setBusy(true);
-        haptic.heavy();
-        void Promise.resolve(onAccept()).finally(() => setBusy(false));
+        celebrate();
       }
     }, 30);
+  }
+
+  function celebrate() {
+    setBusy(true);
+    haptic.heavy();
+    setTimeout(() => {
+      void Promise.resolve(onAccept()).finally(() => setBusy(false));
+    }, 700);
   }
 
   function end() {
@@ -242,12 +269,13 @@ export function HoldToAccept({ onAccept }: { onAccept: () => void | Promise<void
         style={{ height: 64, borderRadius: 999, backgroundColor: C.ink, overflow: "hidden", justifyContent: "center" }}
       >
         <View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.round(progress * 100)}%`, backgroundColor: C.amber }} />
-        <Text style={{ textAlign: "center", color: progress > 0.45 ? C.ink : C.paper, fontFamily: font.bold, fontSize: 17 }}>
-          {busy ? "Accepting…" : "Hold to accept"}
+        <Text style={{ textAlign: "center", color: progress > 0.45 || busy ? C.ink : C.paper, fontFamily: font.bold, fontSize: 17 }}>
+          {busy ? "You've got it" : "Hold to accept"}
         </Text>
+        {busy ? <Check color={C.ink} size={18} style={{ position: "absolute", right: 18 }} /> : null}
       </Pressable>
       {hint ? <Text style={{ marginTop: 8, textAlign: "center", color: C.steel, fontFamily: font.body, fontSize: 14 }}>{hint}</Text> : null}
-      {Platform.OS === "web" ? (
+      {Platform.OS === "web" && !busy ? (
         <Pressable onPress={() => setConfirm(true)} style={{ minHeight: 44, alignItems: "center", justifyContent: "center" }}>
           <Text style={{ color: C.ink, fontFamily: font.semi, fontSize: 14, textDecorationLine: "underline" }}>Accept job</Text>
         </Pressable>
@@ -264,8 +292,7 @@ export function HoldToAccept({ onAccept }: { onAccept: () => void | Promise<void
                 label="Accept"
                 onPress={() => {
                   setConfirm(false);
-                  setBusy(true);
-                  void Promise.resolve(onAccept()).finally(() => setBusy(false));
+                  celebrate();
                 }}
               />
             </View>

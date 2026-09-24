@@ -15,6 +15,7 @@ export type DemoState = {
   ratings: DemoRow[];
   device_tokens: DemoRow[];
   driver_documents: DemoRow[];
+  feed_posts: DemoRow[];
 };
 
 export type DemoActor = { id: string; role: Role };

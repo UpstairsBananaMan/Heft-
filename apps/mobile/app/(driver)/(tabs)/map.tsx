@@ -12,7 +12,7 @@ import {
   type Job,
 } from "@heft/shared";
 import { JobMap, type MapPin } from "../../../src/components/JobMap";
-import { ArtSlot } from "../../../src/components/slots";
+import { FloatingIllustration } from "../../../src/components/Illustration";
 import { C, font, HoldToAccept, PrimaryButton } from "../../../src/components/v2";
 import { errorText, invoke } from "../../../src/lib/invoke";
 import { haptic } from "../../../src/lib/haptics";
@@ -125,9 +125,9 @@ export default function DriverJobs() {
         ) : null}
         {online && jobs.isSuccess && rows.length === 0 ? (
           <View style={{ alignItems: "center", padding: 16 }}>
-            <ArtSlot name="No jobs" />
+            <FloatingIllustration name="box-sleep" />
             <Text style={{ marginTop: 8, textAlign: "center", color: C.steel, fontFamily: font.body, fontSize: 16 }}>
-              No jobs near you right now. We'll notify you when one comes in.
+              Quiet out there. We'll show new jobs here as soon as they come in.
             </Text>
           </View>
         ) : null}

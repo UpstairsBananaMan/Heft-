@@ -19,6 +19,7 @@ const TABLES = [
   "ratings",
   "device_tokens",
   "driver_documents",
+  "feed_posts",
 ] as const;
 
 type TableName = (typeof TABLES)[number];
@@ -49,6 +50,7 @@ function rowsOf(state: DemoState, table: TableName): DemoRow[] {
 }
 
 function visible(table: TableName, rows: DemoRow[], actor: DemoRequest["actor"]): DemoRow[] {
+  if (table === "feed_posts" && actor?.role !== "admin") return rows.filter((row) => row.status === "approved");
   if (!actor || actor.role === "admin") return rows;
   if (table === "jobs" && actor.role === "customer") return rows.filter((row) => row.customer_id === actor.id);
   if (table === "jobs" && actor.role === "driver") {
@@ -155,6 +157,7 @@ function canMove(from: string, to: string, role: Role): boolean {
 
 export function applyDemo(input: DemoState, request: DemoRequest): { state: DemoState; result: DemoResult } {
   const state = clone(input);
+  if (!Array.isArray(state.feed_posts)) state.feed_posts = createDemoState().feed_posts;
   if (request.kind === "invoke") return applyInvoke(state, request);
   if (!isTable(request.table)) return fail(state, `Unknown table ${request.table}`);
   const table = request.table;

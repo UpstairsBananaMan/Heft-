@@ -96,6 +96,7 @@ export function createDemoState(now = new Date().toISOString()): DemoState {
         current_lat: 30.4213,
         current_lng: -87.2169,
         last_seen_at: now,
+        show_name_in_feed: true,
       },
       {
         user_id: DEMO_IDS.pendingDriver,
@@ -118,6 +119,7 @@ export function createDemoState(now = new Date().toISOString()): DemoState {
         current_lat: null,
         current_lng: null,
         last_seen_at: null,
+        show_name_in_feed: false,
       },
     ],
     jobs: [
@@ -162,6 +164,11 @@ export function createDemoState(now = new Date().toISOString()): DemoState {
       doc("doc-ins", DEMO_IDS.driver, "insurance", "approved", now),
       doc("doc-photo", DEMO_IDS.driver, "vehicle_photo", "approved", now),
       doc("doc-tanya-lic", DEMO_IDS.pendingDriver, "license", "in_review", now),
+    ],
+    feed_posts: [
+      feedPost("feed-couch", DEMO_IDS.paidTable, "Large couch", "Large", "couch", "large", "Cordova Park", "East Hill", "September", "photo-couch-before", "photo-couch-after", now),
+      feedPost("feed-fridge", DEMO_IDS.paidMattress, "Medium fridge", "Medium", "appliance", "medium", "Brownsville", "Downtown", "September", "photo-fridge-before", "photo-fridge-after", now),
+      feedPost("feed-mattress", DEMO_IDS.disputedJob, "Medium mattress", "Medium", "mattress", "medium", "Myrtle Grove", "North Hill", "August", "photo-mattress-before", "photo-mattress-after", now),
     ],
   };
 }
@@ -237,6 +244,43 @@ function job(
 
 function event(id: string, jobId: string, type: string, actor: string, now: string, payload: Record<string, unknown>) {
   return { id, job_id: jobId, type, actor_id: actor, payload, created_at: now };
+}
+
+function feedPost(
+  id: string,
+  jobId: string,
+  item: string,
+  size: string,
+  itemType: string,
+  sizeCategory: string,
+  pickup: string,
+  dropoff: string,
+  month: string,
+  before: string,
+  after: string,
+  now: string,
+) {
+  return {
+    id,
+    job_id: jobId,
+    status: "approved",
+    is_demo: true,
+    item_label: item,
+    size_label: size,
+    item_type: itemType,
+    size_category: sizeCategory,
+    pickup_area: pickup,
+    dropoff_area: dropoff,
+    month_label: month,
+    driver_name: "Marcus",
+    rating_avg: 5,
+    rating_count: 2,
+    before_key: before,
+    after_key: after,
+    approved_by: DEMO_IDS.admin,
+    created_at: now,
+    updated_at: now,
+  };
 }
 
 function payout(id: string, jobId: string, amount: number, now: string) {

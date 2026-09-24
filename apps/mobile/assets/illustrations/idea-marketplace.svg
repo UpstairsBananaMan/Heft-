@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 88" width="120" height="88" role="img" aria-label="Armchair with a price tag"><title>Armchair with a price tag</title><rect width="120" height="88" rx="16" fill="#FDF6E3"/>
+<ellipse cx="56" cy="78" rx="34" ry="4" fill="#1A1D21" opacity=".1"/>
+<rect x="28" y="30" width="52" height="30" rx="10" fill="#FBEBC0" stroke="#1A1D21" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="22" y="44" width="14" height="26" rx="6" fill="#F2C45A" stroke="#1A1D21" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><rect x="72" y="44" width="14" height="26" rx="6" fill="#F2C45A" stroke="#1A1D21" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="34" y="52" width="40" height="14" rx="5" fill="#E8A317" stroke="#1A1D21" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M30 70 v8 M78 70 v8" stroke="#1A1D21" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M84 22 l14 0 l8 8 l-8 8 l-14 0 z" fill="#FFFFFF" stroke="#1A1D21" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><circle cx="90" cy="30" r="2" fill="#1A1D21"/>
+<path d="M80 30 Q72 30 70 36" fill="none" stroke="#1A1D21" stroke-width="1.8"/></svg>

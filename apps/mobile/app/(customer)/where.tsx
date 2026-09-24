@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { ArrowLeftRight, ArrowLeft, Clock, LocateFixed, MapPin } from "lucide-react-native";
-import { filterPlaces, haversineMiles, PENSACOLA_CENTER, type PlacePreset } from "@heft/shared";
+import { filterPlaces, HARDWARE_SUGGESTION, haversineMiles, PENSACOLA_CENTER, type PlacePreset } from "@heft/shared";
 import { demoMode } from "../../src/lib/supabase";
 import { haptic } from "../../src/lib/haptics";
 import { useBooking } from "../../src/store/booking";
@@ -17,29 +17,29 @@ export default function WhereScreen() {
   const query = focus === "pickup" ? pickupText : dropText;
   const results = useMemo(() => (demoMode ? filterPlaces(query) : []), [query]);
 
+  function finishIfReady() {
+    const state = useBooking.getState();
+    if (!state.pickup || !state.dropoff || state.pickup.address === state.dropoff.address) return;
+    const step = state.skipAfterAddress === "price" && state.size ? "price" : state.presetItem ? "size" : "item";
+    booking.patch({ step });
+    if (router.canGoBack()) router.back();
+    else router.replace("/(customer)/home");
+  }
+
   function choose(place: PlacePreset) {
     haptic.select();
     if (focus === "pickup") {
       booking.setPickup(place);
       setPickupText(place.address);
       setFocus("dropoff");
-      if (booking.dropoff && booking.dropoff.address !== place.address) {
-        booking.patch({ step: "item" });
-        if (router.canGoBack()) router.back();
-        else router.replace("/(customer)/home");
-      }
+      finishIfReady();
       return;
     }
     booking.setDropoff(place);
     setDropText(place.address);
     const pickup = booking.pickup;
-    if (pickup && pickup.address !== place.address) {
-      booking.patch({ step: "item" });
-      if (router.canGoBack()) router.back();
-      else router.replace("/(customer)/home");
-    } else {
-      setFocus("pickup");
-    }
+    if (pickup && pickup.address !== place.address) finishIfReady();
+    else setFocus("pickup");
   }
 
   function useLocation() {
@@ -113,6 +113,25 @@ export default function WhereScreen() {
               <LocateFixed color={C.amberInk} size={18} />
             </View>
             <Text style={rowTitle}>Use my location</Text>
+          </Pressable>
+        ) : null}
+        {booking.suggestHardware && focus === "pickup" && !booking.pickup ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Home Depot, suggested pickup"
+            onPress={() => {
+              setFocus("pickup");
+              choose(HARDWARE_SUGGESTION);
+            }}
+            style={row}
+          >
+            <View style={tile}>
+              <MapPin color={C.amberInk} size={18} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={rowTitle}>Home Depot</Text>
+              <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 14 }}>Suggested pickup · {HARDWARE_SUGGESTION.address}</Text>
+            </View>
           </Pressable>
         ) : null}
       </View>

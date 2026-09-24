@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -14,10 +14,13 @@ import {
   type JobStatus,
 } from "@heft/shared";
 import { JobMap } from "../components/JobMap";
-import { CelebrationSlot } from "../components/slots";
+import { Confetti, PulseRing, SkipLayer, useDelight } from "../components/delight";
+import { LookingIllustration, WavingIllustration, Illustration } from "../components/Illustration";
 import { C, font, PrimaryButton } from "../components/v2";
+import { haptic } from "../lib/haptics";
 import { invoke } from "../lib/invoke";
-import { supabase } from "../lib/supabase";
+import { demoMode, supabase } from "../lib/supabase";
+import type { IllustrationName } from "../illustrations/markup";
 
 type Card = {
   display_name: string;
@@ -61,6 +64,52 @@ export default function CustomerJob() {
     queryFn: () => invoke<Card | null>("assigned_driver_card", { job_id: id }),
   });
   const row = job.data;
+  const index = row ? stepIndex(row.status) : 0;
+  const done = row?.status === "delivered" || row?.status === "paid";
+  const person = card.data;
+  const first = person?.display_name?.split(" ")[0] ?? "your driver";
+  const match = useDelight({
+    jobId: row?.id,
+    moment: "driver-found",
+    announce: `${first} is on it`,
+    enabled: Boolean(row && person && !done && index >= 1),
+  });
+  const picked = useDelight({
+    jobId: row?.id,
+    moment: "picked-up",
+    announce: "Picked up",
+    enabled: Boolean(row && index === 2),
+  });
+  const delivered = useDelight({
+    jobId: row?.id,
+    moment: "delivered",
+    announce: "Delivered",
+    enabled: Boolean(row && done),
+  });
+  const [shout, setShout] = useState(false);
+  const [rateOn, setRateOn] = useState(false);
+  const [hideParty, setHideParty] = useState(false);
+  useEffect(() => {
+    if (!match.playing) return;
+    setShout(true);
+    haptic.success();
+    const timer = setTimeout(() => setShout(false), 2000);
+    return () => clearTimeout(timer);
+  }, [match.playing]);
+  useEffect(() => {
+    if (!picked.playing) return;
+    haptic.light();
+  }, [picked.playing]);
+  useEffect(() => {
+    if (!delivered.playing && !delivered.settled) return;
+    if (delivered.playing) haptic.success();
+    if (delivered.reduced || delivered.settled) {
+      setRateOn(true);
+      return;
+    }
+    const timer = setTimeout(() => setRateOn(true), 800);
+    return () => clearTimeout(timer);
+  }, [delivered.playing, delivered.settled, delivered.reduced]);
   if (!row) {
     return (
       <View style={{ flex: 1, backgroundColor: C.paper, alignItems: "center", justifyContent: "center" }}>
@@ -68,16 +117,15 @@ export default function CustomerJob() {
       </View>
     );
   }
-  const index = stepIndex(row.status);
   const pins = [
     { id: "pickup", lat: row.pickup_lat, lng: row.pickup_lng, title: "Pickup", kind: "pickup" as const },
     { id: "dropoff", lat: row.dropoff_lat, lng: row.dropoff_lng, title: "Drop-off", kind: "dropoff" as const },
+    ...(index >= 1
+      ? [{ id: "driver", lat: row.pickup_lat + 0.01, lng: row.pickup_lng - 0.01, title: "", kind: "driver" as const }]
+      : []),
   ];
   const minutes = Math.max(8, Math.round(haversineMiles(row.pickup_lat, row.pickup_lng, row.dropoff_lat, row.dropoff_lng) * 2.4));
-  const headline = CUSTOMER_STATUS[row.status];
-  const done = row.status === "delivered" || row.status === "paid";
-  const person = card.data;
-  const first = person?.display_name?.split(" ")[0] ?? "driver";
+  const headline = shout ? `${first} is on it!` : CUSTOMER_STATUS[row.status];
   const phone = person?.phone ? (person.phone.startsWith("+") ? person.phone : `+1${person.phone}`) : null;
   const vehicle = [person?.vehicle_color, person?.vehicle_make, person?.vehicle_model].filter(Boolean).join(" ");
 
@@ -97,11 +145,16 @@ export default function CustomerJob() {
             <Text style={{ fontFamily: font.semi, fontSize: 14 }}>Help</Text>
           </Pressable>
         </View>
+        {index === 0 ? (
+          <View pointerEvents="none" style={{ position: "absolute", top: "46%", left: "46%" }}>
+            <PulseRing />
+          </View>
+        ) : null}
+        {picked.playing ? <View pointerEvents="none" accessible={false} style={{ position: "absolute", top: "44%", left: "42%", width: 18, height: 18, borderRadius: 4, backgroundColor: C.ink, transform: [{ translateX: 4 }] }} /> : null}
       </View>
-      <View style={{ backgroundColor: C.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "62%" }}>
+      <View pointerEvents={match.locked && match.playing ? "none" : "auto"} style={{ backgroundColor: C.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "62%" }}>
         <ScrollView>
-          {done ? <CelebrationSlot moment="delivered" /> : null}
-          {index === 1 ? <CelebrationSlot moment="driver-found" /> : null}
+          {index === 0 ? <LookingIllustration /> : null}
           <Text accessibilityLiveRegion="polite" style={{ fontFamily: font.heading, fontSize: 26, color: C.ink }}>{headline}</Text>
           <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 16, marginTop: 4 }}>
             {index === 0 ? row.pickup_address.split(",")[0] : `About ${minutes} min to pickup · ${row.pickup_address.split(",")[0]}`}
@@ -186,6 +239,7 @@ export default function CustomerJob() {
           ) : null}
           {row.status === "cancelled" ? <Text style={{ marginTop: 8, fontFamily: font.body, fontSize: 16 }}>You weren't charged.</Text> : null}
           {row.status === "disputed" ? <Text style={{ marginTop: 8, fontFamily: font.body, fontSize: 16 }}>We're looking into it.</Text> : null}
+          <SkipLayer active={match.playing || picked.playing} onSkip={() => { match.skip(); picked.skip(); }} />
           <Pressable onPress={() => setHelp((value) => !value)} style={{ minHeight: 44, justifyContent: "center" }}>
             <Text style={{ textDecorationLine: "underline", fontFamily: font.semi, fontSize: 16 }}>Help</Text>
           </Pressable>
@@ -197,8 +251,46 @@ export default function CustomerJob() {
           ) : null}
         </ScrollView>
       </View>
+      {done && !hideParty ? (
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.paper, zIndex: 5 }}>
+          <Confetti count={40} play={delivered.playing && !delivered.reduced} />
+          <View style={{ flex: 1, alignItems: "center", paddingTop: 88, paddingHorizontal: 24, zIndex: 2 }}>
+            <WavingIllustration play={delivered.playing && !delivered.reduced} />
+            <Text style={{ marginTop: 12, fontFamily: font.heading, fontSize: 32, color: C.ink }}>Delivered</Text>
+            <Text style={{ marginTop: 6, textAlign: "center", fontFamily: font.body, fontSize: 16, color: C.steel }}>
+              Your {row.size_category === "xl" ? "extra large" : row.size_category} {row.item_description.toLowerCase()} arrived at{" "}
+              {row.delivered_at
+                ? new Date(row.delivered_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                : "just now"}
+              .
+            </Text>
+            <View style={{ marginTop: 16, backgroundColor: C.white, borderRadius: 16, padding: 10, transform: [{ rotate: "-2deg" }] }}>
+              {demoMode ? <Illustration name={deliveryArt(row.item_description)} width={220} height={140} /> : <View style={{ width: 220, height: 140, backgroundColor: C.sand150 }} />}
+              <Text style={{ fontFamily: font.medium, fontSize: 13, color: C.steel }}>Delivery photo · by {first}</Text>
+            </View>
+          </View>
+          {rateOn ? (
+            <View pointerEvents={delivered.locked ? "none" : "auto"} style={{ backgroundColor: C.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, zIndex: 3 }}>
+              <Text style={{ fontFamily: font.heading, fontSize: 20 }}>How was {first}?</Text>
+              <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 14, marginBottom: 12 }}>Your rating helps other customers.</Text>
+              <PrimaryButton label="Rate your driver" onPress={() => router.push(`/rate/${row.id}`)} />
+              <Pressable onPress={() => setHideParty(true)} style={{ minHeight: 44, alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ fontFamily: font.semi, fontSize: 16 }}>Not now</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          <SkipLayer active={delivered.playing} onSkip={delivered.skip} />
+        </View>
+      ) : null}
     </View>
   );
+}
+
+function deliveryArt(item: string): IllustrationName {
+  const value = item.toLowerCase();
+  if (value.includes("fridge") || value.includes("appliance")) return "photo-fridge-after";
+  if (value.includes("mattress")) return "photo-mattress-after";
+  return "photo-couch-after";
 }
 
 const round = {

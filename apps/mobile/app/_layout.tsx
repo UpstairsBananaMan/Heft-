@@ -1,4 +1,5 @@
 import "react-native-gesture-handler";
+import "react-native-reanimated";
 import "../global.css";
 import { useEffect } from "react";
 import { View } from "react-native";

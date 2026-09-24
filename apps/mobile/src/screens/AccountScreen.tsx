@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Alert, Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Trash2 } from "lucide-react-native";
 import { APP_NAME, driverKeepPercent } from "@heft/shared";
 import { C, font, OutlineButton } from "../components/v2";
-import { demoMode } from "../lib/supabase";
+import { demoMode, supabase } from "../lib/supabase";
 import { demoPerson, setDemoRole } from "../lib/demo-client";
 import { errorText, invoke } from "../lib/invoke";
 import { useSession } from "../store/session";
@@ -16,6 +16,16 @@ export function AccountScreen() {
   const signOut = useSession((state) => state.signOut);
   const refreshProfile = useSession((state) => state.refreshProfile);
   const [error, setError] = useState("");
+  const [showName, setShowName] = useState(false);
+  useEffect(() => {
+    if (profile?.role !== "driver" || !profile.id) return;
+    void supabase
+      .from("driver_profiles")
+      .select("show_name_in_feed")
+      .eq("user_id", profile.id)
+      .maybeSingle()
+      .then(({ data }) => setShowName(Boolean((data as { show_name_in_feed?: boolean } | null)?.show_name_in_feed)));
+  }, [profile?.id, profile?.role]);
   const first = profile?.display_name?.slice(0, 1) ?? "?";
 
   async function remove() {
@@ -61,6 +71,22 @@ export function AccountScreen() {
         <Row label="Privacy Policy" onPress={() => router.push("/legal/privacy")} />
         <Row label="Terms of Service" onPress={() => router.push("/legal/terms")} />
       </View>
+      {profile?.role === "driver" ? (
+        <View style={{ marginTop: 16, backgroundColor: C.white, borderRadius: 18, padding: 16, flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: font.semi, fontSize: 16 }}>Show my first name on Moves around town</Text>
+            <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 14, marginTop: 4 }}>Off until you turn it on.</Text>
+          </View>
+          <Switch
+            accessibilityLabel="Show my first name on Moves around town"
+            value={showName}
+            onValueChange={(value) => {
+              setShowName(value);
+              if (profile.id) void supabase.from("driver_profiles").update({ show_name_in_feed: value }).eq("user_id", profile.id);
+            }}
+          />
+        </View>
+      ) : null}
       {profile?.role === "customer" ? (
         <Text style={{ marginTop: 16, color: C.steel, fontFamily: font.body, fontSize: 15 }}>
           Want to earn with your truck? Drive with {APP_NAME}. Driving uses a separate account for now.

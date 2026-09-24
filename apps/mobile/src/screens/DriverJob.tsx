@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Linking, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft, MessageCircle, Phone } from "lucide-react-native";
+import { ArrowLeft, Check, Clock, MessageCircle, Phone } from "lucide-react-native";
 import {
   DRIVER_ACTION,
   formatUsd,
@@ -13,7 +13,8 @@ import {
   type JobStatus,
 } from "@heft/shared";
 import { JobMap } from "../components/JobMap";
-import { CelebrationSlot } from "../components/slots";
+import { Confetti, CountUp, SkipLayer, useDelight } from "../components/delight";
+import { Illustration } from "../components/Illustration";
 import { C, font, HoldToAccept, OutlineButton, PrimaryButton } from "../components/v2";
 import { demoMode, supabase } from "../lib/supabase";
 import { errorText, invoke } from "../lib/invoke";
@@ -104,7 +105,7 @@ export default function DriverJob() {
     try {
       haptic.medium();
       if (next === "delivered") {
-        if (demoMode && !photo) {
+        if (demoMode) {
           await supabase.from("job_photos").insert({ job_id: current.id, storage_path: `${current.id}/pod.jpg`, kind: "pod" });
         }
         await invoke("update-job-status", { job_id: current.id, status: "delivered" });
@@ -135,15 +136,7 @@ export default function DriverJob() {
   }
 
   if (donePay != null) {
-    return (
-      <View style={{ flex: 1, backgroundColor: C.paper, padding: 24, justifyContent: "center" }}>
-        <CelebrationSlot moment="delivered" />
-        <Text style={{ fontFamily: font.heading, fontSize: 28 }}>Delivery complete</Text>
-        <Text style={{ fontFamily: font.display, fontSize: 44, marginVertical: 8 }}>{formatUsd(donePay)}</Text>
-        <Text style={{ fontFamily: font.body, fontSize: 16, color: C.steel, marginBottom: 16 }}>Set up payouts to get paid</Text>
-        <PrimaryButton label="Back to jobs" onPress={() => router.replace("/(driver)/map")} />
-      </View>
-    );
+    return <PayoutMoment cents={donePay} jobId={current.id} item={current.item_description} route={`${neighbourhood(current.pickup_address)} → ${neighbourhood(current.dropoff_address)}`} miles={Number(current.distance_miles ?? 0)} onDone={() => router.replace("/(driver)/map")} />;
   }
 
   const pins = [
@@ -222,6 +215,73 @@ export default function DriverJob() {
           </View>
         </View>
       </ScrollView>
+    </View>
+  );
+}
+
+function PayoutMoment({
+  cents,
+  jobId,
+  item,
+  route,
+  miles,
+  onDone,
+}: {
+  cents: number;
+  jobId: string;
+  item: string;
+  route: string;
+  miles: number;
+  onDone: () => void;
+}) {
+  const payouts = useQuery({
+    queryKey: ["payout-status", jobId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("payouts").select("amount_cents,status,job_id");
+      if (error) throw error;
+      return (data ?? []) as { amount_cents: number; status: string; job_id: string }[];
+    },
+  });
+  const mine = (payouts.data ?? []).find((row) => row.job_id === jobId);
+  const landed = mine?.status === "paid";
+  const today = (payouts.data ?? []).reduce((sum, row) => sum + (row.amount_cents ?? 0), 0) || cents;
+  const delight = useDelight({
+    jobId,
+    moment: "payout",
+    announce: landed ? `${formatUsd(cents)} paid` : `${formatUsd(cents)} on its way to your account`,
+    enabled: true,
+  });
+  const [stars, setStars] = useState(false);
+  return (
+    <View style={{ flex: 1, backgroundColor: C.ink }}>
+      <Confetti count={20} play={delight.playing && !delight.reduced} />
+      <View style={{ flex: 1, alignItems: "center", paddingTop: 88, zIndex: 2 }}>
+        <View style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: C.amber50, alignItems: "center", justifyContent: "center" }}>
+          <Illustration name="box-happy" width={84} height={84} />
+        </View>
+        <Text style={{ marginTop: 16, color: "#C8C2B8", fontFamily: font.medium, fontSize: 14 }}>Delivery complete</Text>
+        <CountUp cents={cents} play={delight.playing && !delight.reduced} prefix="+" color={C.paper} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 }}>
+          {landed ? <Check color="#F2C45A" size={16} /> : <Clock color="#F2C45A" size={16} />}
+          <Text style={{ color: "#F2C45A", fontFamily: font.semi, fontSize: 16 }}>{landed ? "Paid" : "On its way to your account"}</Text>
+        </View>
+        <View style={{ marginTop: 12, backgroundColor: "#24282D", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, flexDirection: "row", alignItems: "center" }}>
+          <Text style={{ color: C.paper, fontFamily: font.semi, fontSize: 14 }}>Today </Text>
+          <CountUp cents={today} play={delight.playing && !delight.reduced} color={C.paper} size={16} hapticOnEnd={false} />
+        </View>
+        <View style={{ marginTop: 28, alignSelf: "stretch", marginHorizontal: 20, backgroundColor: "#24282D", borderRadius: 16, padding: 14 }}>
+          <Text style={{ color: C.paper, fontFamily: font.semi, fontSize: 16 }}>{item}</Text>
+          <Text style={{ color: "#C8C2B8", fontFamily: font.body, fontSize: 14 }}>{route} · {miles.toFixed(1)} mi</Text>
+          <Text style={{ marginTop: 8, color: "#C8C2B8", fontFamily: font.body, fontSize: 14 }}>Delivery photo saved</Text>
+        </View>
+      </View>
+      <View pointerEvents={delight.locked ? "none" : "auto"} style={{ padding: 20, zIndex: 3 }}>
+        <PrimaryButton label="Back to jobs" onPress={onDone} />
+        <Pressable onPress={() => setStars(true)} style={{ minHeight: 48, marginTop: 8, borderRadius: 16, borderWidth: 1.5, borderColor: "#3A3424", alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: C.paper, fontFamily: font.semi, fontSize: 16 }}>{stars ? "Thanks" : "Rate the customer"}</Text>
+        </Pressable>
+      </View>
+      <SkipLayer active={delight.playing} onSkip={delight.skip} onDark />
     </View>
   );
 }

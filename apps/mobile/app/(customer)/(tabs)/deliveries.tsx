@@ -2,7 +2,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { CUSTOMER_STATUS, formatUsd, type Job } from "@heft/shared";
-import { ArtSlot } from "../../../src/components/slots";
+import { FloatingIllustration } from "../../../src/components/Illustration";
 import { C, font, PrimaryButton } from "../../../src/components/v2";
 import { supabase } from "../../../src/lib/supabase";
 
@@ -28,10 +28,10 @@ export default function Deliveries() {
       {jobs.isLoading ? <Text style={{ color: C.steel }}> </Text> : null}
       {!jobs.isLoading && rows.length === 0 ? (
         <View style={{ alignItems: "center", paddingVertical: 32 }}>
-          <ArtSlot name="Empty deliveries" />
-          <Text style={{ marginTop: 12, fontFamily: font.heading, fontSize: 20 }}>No deliveries yet</Text>
+          <FloatingIllustration name="box-sleep" />
+          <Text style={{ marginTop: 12, fontFamily: font.heading, fontSize: 20 }}>Nothing on the move yet</Text>
           <Text style={{ marginTop: 6, color: C.steel, fontFamily: font.body, fontSize: 16, textAlign: "center" }}>
-            Book your first one. You'll see the price before you pay anything.
+            Got something big?
           </Text>
           <View style={{ marginTop: 16, alignSelf: "stretch" }}>
             <PrimaryButton label="Book a delivery" onPress={() => router.push("/(customer)/home")} />

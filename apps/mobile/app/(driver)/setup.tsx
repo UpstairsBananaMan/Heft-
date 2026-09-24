@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { Camera, Check, Clock, IdCard, Landmark, ShieldCheck, Truck } from "lucide-react-native";
 import { APP_NAME, driverKeepPercent, type DriverProfile } from "@heft/shared";
+import { Illustration } from "../../src/components/Illustration";
 import { C, font, PrimaryButton, Wordmark } from "../../src/components/v2";
 import { demoMode, supabase } from "../../src/lib/supabase";
 import { useSession } from "../../src/store/session";
@@ -96,7 +97,10 @@ export default function DriverSetup() {
     <View style={{ flex: 1, backgroundColor: C.paper }}>
       <View style={{ backgroundColor: C.ink, paddingTop: 56, paddingHorizontal: 20, paddingBottom: 36 }}>
         <Wordmark size={22} />
-        <Text style={{ marginTop: 18, color: C.paper, fontFamily: font.heading, fontSize: 28 }}>Get approved to drive</Text>
+        <View accessible={false} style={{ marginTop: 16, width: 72, height: 72, borderRadius: 36, backgroundColor: C.amber50, alignItems: "center", justifyContent: "center" }}>
+          <Illustration name="box-idle" width={52} height={52} />
+        </View>
+        <Text style={{ marginTop: 12, color: C.paper, fontFamily: font.heading, fontSize: 28 }}>Get approved to drive</Text>
         <Text style={{ marginTop: 6, color: "#C8C2B8", fontFamily: font.body, fontSize: 16 }}>Finish these steps to get approved.</Text>
       </View>
       <View style={{ marginTop: -20, marginHorizontal: 16, backgroundColor: C.white, borderRadius: 18, padding: 16 }}>

@@ -11,6 +11,7 @@ export * from "./signup";
 export * from "./csv";
 export * from "./legal";
 export * from "./copy";
+export * from "./feed";
 export * from "./demo/seed";
 export * from "./demo/apply";
 export * from "./demo/query";
