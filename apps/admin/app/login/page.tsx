@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -81,6 +82,19 @@ function LoginForm() {
           >
             {pending ? "Signing in" : "Enter console"}
           </button>
+          <p className="mt-6 text-xs leading-5 text-steel">
+            The phone app cannot create an admin. Accounts that pick admin are stored as customers. Promote an admin
+            with the SQL script after the person exists.
+          </p>
+          <p className="mt-3 text-xs text-steel">
+            <Link href="/legal/privacy" className="underline">
+              Privacy Policy (draft)
+            </Link>
+            {" · "}
+            <Link href="/legal/terms" className="underline">
+              Terms of Service (draft)
+            </Link>
+          </p>
         </form>
       </section>
     </main>

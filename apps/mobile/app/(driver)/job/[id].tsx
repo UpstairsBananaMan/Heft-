@@ -15,6 +15,7 @@ import {
 } from "@heft/shared";
 import { CancelBox, DisputeBox } from "../../../src/components/JobActions";
 import { Button, EmptyState, ErrorText, Notice, Screen, StatusPill } from "../../../src/components/ui";
+import { track } from "../../../src/lib/analytics";
 import { errorText, invoke } from "../../../src/lib/invoke";
 import { uploadJobImage } from "../../../src/lib/photos";
 import { supabase } from "../../../src/lib/supabase";
@@ -149,6 +150,7 @@ export default function DriverJob() {
       await invoke("accept-job", { job_id: id });
       await queryClient.invalidateQueries({ queryKey: ["job", id] });
       await queryClient.invalidateQueries({ queryKey: ["open-jobs"] });
+      track({ name: "job_accepted" });
       toast("Job accepted. Head to pickup.", "ok");
     } catch (err) {
       fail(err);
@@ -194,6 +196,7 @@ export default function DriverJob() {
     if (result.canceled || !result.assets[0]) return;
     try {
       await uploadJobImage("pod", row.id, result.assets[0].uri);
+      track({ name: "pod_uploaded" });
       await refreshPod();
       toast("Proof photo saved.", "ok");
     } catch (err) {

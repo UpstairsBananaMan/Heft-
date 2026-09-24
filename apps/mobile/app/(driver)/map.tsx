@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { formatUsd, type DriverProfile, type Job } from "@heft/shared";
 import { JobMap } from "../../src/components/JobMap";
 import { BottomNav, Button, EmptyState, Screen } from "../../src/components/ui";
+import { track } from "../../src/lib/analytics";
 import { errorText, invoke } from "../../src/lib/invoke";
 import { supabase } from "../../src/lib/supabase";
 import { useSession } from "../../src/store/session";
@@ -70,6 +71,7 @@ export default function DriverMap() {
     try {
       await invoke("accept-job", { job_id: jobId });
       await queryClient.invalidateQueries({ queryKey: ["open-jobs"] });
+      track({ name: "job_accepted" });
       toast("Job accepted. Start toward pickup.", "ok");
       router.push(`/(driver)/job/${jobId}`);
     } catch (err) {
@@ -91,7 +93,10 @@ export default function DriverMap() {
         </>
       ) : null}
       {row?.status === "pending" ? (
-        <EmptyState title="Waiting on approval" body="This vehicle is pending. Ask an admin to approve it in the web console, then come back and go online." />
+        <EmptyState
+          title="Waiting on approval"
+          body="This vehicle is pending. You cannot go online or accept jobs yet. An admin must tap Approve on the website. Come back after that and tap Go online."
+        />
       ) : null}
       {row?.status === "suspended" ? (
         <EmptyState title="Vehicle suspended" body="Dispatch suspended this profile. You cannot accept jobs until an admin clears it." />

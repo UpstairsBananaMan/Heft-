@@ -1,22 +1,30 @@
 import { useState } from "react";
 import { Text, View } from "react-native";
-import { canCancel, canOpenDispute, type Job, type Role } from "@heft/shared";
-import { Button, ErrorText, Field } from "./ui";
+import { canCancel, canOpenDispute, cancelHint, disputeBlockedReason, type Job, type Role } from "@heft/shared";
+import { track } from "../lib/analytics";
+import { Button, ErrorText, Field, Notice } from "./ui";
 import { errorText, invoke } from "../lib/invoke";
 import { supabase } from "../lib/supabase";
 import { toast } from "../store/toast";
 
-export function CancelBox({ job, role, onDone }: { job: Job; role: Role; onDone: () => void }) {
+export function CancelBox({ job, role, onDone }: { job: Job; role: Exclude<Role, "admin">; onDone: () => void }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  if (!canCancel(job.status, role)) return null;
+  const hint = cancelHint(job.status, role);
+  if (!canCancel(job.status, role) || !hint) return null;
 
   async function cancel() {
+    if (reason.trim().length < 3) {
+      setError("Add a short reason, at least a few words.");
+      return;
+    }
     setPending(true);
     setError("");
     try {
-      await invoke("update-job-status", { job_id: job.id, status: "cancelled", cancel_reason: reason });
+      await invoke("update-job-status", { job_id: job.id, status: "cancelled", cancel_reason: reason.trim() });
+      track({ name: "job_cancelled", role, from_status: job.status });
+      toast("Job cancelled.", "ok");
       onDone();
     } catch (err) {
       const message = errorText(err);
@@ -27,11 +35,16 @@ export function CancelBox({ job, role, onDone }: { job: Job; role: Role; onDone:
     }
   }
 
+  const beforeAccept = job.status === "draft" || job.status === "priced" || job.status === "open";
+  const label = beforeAccept ? "Cancel before a driver accepts" : "Cancel this assignment";
+
   return (
     <View className="mt-6">
+      <Text className="mb-2 text-xs font-semibold uppercase tracking-wider text-steel">Cancel</Text>
+      <Notice>{hint}</Notice>
       <Field label="Cancel reason" value={reason} onChangeText={setReason} placeholder="Customer not ready" />
       {error ? <ErrorText>{error}</ErrorText> : null}
-      <Button label={pending ? "Cancelling" : "Cancel job"} tone="ghost" disabled={pending} onPress={cancel} />
+      <Button label={pending ? "Cancelling" : label} tone="ghost" disabled={pending} onPress={() => void cancel()} />
     </View>
   );
 }
@@ -50,9 +63,10 @@ export function DisputeBox({
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  if (!canOpenDispute(job.status, paidAt) || !job.driver_id) return null;
+  const blocked = disputeBlockedReason(job.status, paidAt);
+  const open = canOpenDispute(job.status, paidAt) && Boolean(job.driver_id);
 
-  async function open() {
+  async function submit() {
     if (reason.trim().length < 8) {
       setError("Describe the dispute in a sentence.");
       return;
@@ -67,6 +81,8 @@ export function DisputeBox({
       });
       if (insertError) throw insertError;
       await invoke("notify", { job_id: job.id, event: "disputed" }).catch(() => undefined);
+      track({ name: "dispute_opened" });
+      toast("Dispute opened. Dispatch will review it.", "ok");
       onDone();
     } catch (err) {
       const message = errorText(err);
@@ -80,9 +96,14 @@ export function DisputeBox({
   return (
     <View className="mt-6">
       <Text className="mb-2 text-xs font-semibold uppercase tracking-wider text-steel">Dispute</Text>
-      <Field label="What happened" value={reason} onChangeText={setReason} multiline />
-      {error ? <ErrorText>{error}</ErrorText> : null}
-      <Button label={pending ? "Opening" : "Open dispute"} tone="ghost" disabled={pending} onPress={open} />
+      {blocked ? <Notice>{blocked}</Notice> : null}
+      {open ? (
+        <>
+          <Field label="What happened" value={reason} onChangeText={setReason} multiline />
+          {error ? <ErrorText>{error}</ErrorText> : null}
+          <Button label={pending ? "Opening" : "Open dispute"} tone="ghost" disabled={pending} onPress={() => void submit()} />
+        </>
+      ) : null}
     </View>
   );
 }

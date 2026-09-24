@@ -41,6 +41,14 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
             </Link>
           ))}
         </nav>
+        <div className="px-6 pb-2 text-xs text-paper/70">
+          <Link href="/legal/privacy" className="block py-1 underline">
+            Privacy (draft)
+          </Link>
+          <Link href="/legal/terms" className="block py-1 underline">
+            Terms (draft)
+          </Link>
+        </div>
         <form action={signOut} className="p-6">
           <button type="submit" className="text-xs font-semibold uppercase tracking-wider text-paper/70">
             Sign out

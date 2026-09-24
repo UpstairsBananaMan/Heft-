@@ -1,16 +1,23 @@
 import Link from "next/link";
+import { Flash } from "@/components/flash";
 import { resolveDispute } from "@/lib/actions";
 import { requireAdmin } from "@/lib/auth";
 
 const STATUSES = ["open", "investigating", "resolved_customer", "resolved_driver", "closed"];
+const QUEUE = new Set(["open", "investigating"]);
 
-export default async function DisputesPage() {
+export default async function DisputesPage({ searchParams }: { searchParams: Promise<{ notice?: string }> }) {
   const gate = await requireAdmin();
   if (!gate.configured) return null;
+  const { notice } = await searchParams;
   const { data: disputes } = await gate.supabase
     .from("disputes")
     .select("*, jobs(item_description, status)")
     .order("created_at", { ascending: false });
+
+  const rows = disputes ?? [];
+  const queue = rows.filter((dispute) => QUEUE.has(dispute.status));
+  const done = rows.filter((dispute) => !QUEUE.has(dispute.status));
 
   return (
     <main>
@@ -19,8 +26,35 @@ export default async function DisputesPage() {
         Resolving a dispute records notes only. Heft does not auto-refund. Reverse a capture in Stripe yourself if the
         notes say the customer should be refunded.
       </p>
-      <ul className="mt-6 space-y-4">
-        {(disputes ?? []).map((dispute) => {
+      <Flash notice={notice} />
+      <Queue title="Needs a decision" rows={queue} empty="No open disputes." />
+      <Queue title="Closed" rows={done} empty="Nothing closed yet." />
+    </main>
+  );
+}
+
+function Queue({
+  title,
+  rows,
+  empty,
+}: {
+  title: string;
+  rows: Array<{
+    id: string;
+    job_id: string;
+    status: string;
+    reason: string;
+    resolution_notes: string | null;
+    created_at: string;
+    jobs: { item_description?: string; status?: string } | { item_description?: string; status?: string }[] | null;
+  }>;
+  empty: string;
+}) {
+  return (
+    <section className="mt-8">
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-steel">{title}</h2>
+      <ul className="mt-4 space-y-4">
+        {rows.map((dispute) => {
           const job = Array.isArray(dispute.jobs) ? dispute.jobs[0] : dispute.jobs;
           return (
             <li key={dispute.id} className="border border-line bg-white p-5">
@@ -30,7 +64,20 @@ export default async function DisputesPage() {
                 </Link>
                 <span className="text-xs uppercase tracking-wider text-steel">{dispute.status}</span>
               </div>
+              <p className="mt-2 text-xs text-steel">{new Date(dispute.created_at).toLocaleString()}</p>
               <p className="mt-3 text-sm">{dispute.reason}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {dispute.status === "open" ? (
+                  <Quick status="investigating" id={dispute.id} label="Mark investigating" />
+                ) : null}
+                {dispute.status === "open" || dispute.status === "investigating" ? (
+                  <>
+                    <Quick status="resolved_customer" id={dispute.id} label="Resolve for customer" />
+                    <Quick status="resolved_driver" id={dispute.id} label="Resolve for driver" />
+                    <Quick status="closed" id={dispute.id} label="Close" />
+                  </>
+                ) : null}
+              </div>
               <form action={resolveDispute} className="mt-4 grid gap-3">
                 <input type="hidden" name="id" value={dispute.id} />
                 <label className="text-xs font-semibold uppercase tracking-wider text-steel">
@@ -58,8 +105,20 @@ export default async function DisputesPage() {
             </li>
           );
         })}
-        {(disputes ?? []).length === 0 ? <li className="text-sm text-steel">No disputes.</li> : null}
+        {rows.length === 0 ? <li className="text-sm text-steel">{empty}</li> : null}
       </ul>
-    </main>
+    </section>
+  );
+}
+
+function Quick({ id, status, label }: { id: string; status: string; label: string }) {
+  return (
+    <form action={resolveDispute}>
+      <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="status" value={status} />
+      <button className="h-10 border border-charcoal px-3 text-sm font-semibold" type="submit">
+        {label}
+      </button>
+    </form>
   );
 }

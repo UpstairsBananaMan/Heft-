@@ -22,6 +22,11 @@ export default async function RevenuePage() {
         Totals are the sum of paid jobs in this project. Seed data does not include jobs, so a fresh database shows
         zero until a delivery is completed.
       </p>
+      <p className="mt-4">
+        <a href="/revenue/export" className="text-sm font-semibold underline">
+          Download CSV
+        </a>
+      </p>
       <section className="mt-6 grid gap-4 sm:grid-cols-3">
         <article className="border border-line bg-white p-5">
           <p className="text-xs uppercase tracking-wider text-steel">Gross</p>

@@ -1,180 +1,146 @@
 # Heft
 
-Pensacola-first marketplace for furniture, lumber, and other bulky loads. One Supabase project backs three roles:
+## What Heft is
 
-- **Customer** and **driver** share `apps/mobile` (Expo). Signup chooses the role. One account, one role.
-- **Admin** uses `apps/admin` (Next.js). Admin is seeded, not offered at signup.
+Heft is a phone app and a website for bulky deliveries in Pensacola: furniture, lumber, and other large loads.
 
-Money is integer cents. The quote formula lives in `packages/shared` and is copied in `supabase/functions/_shared/pricing.ts`.
+- A **customer** asks for a pickup and a drop-off, sees a price, and publishes the job.
+- A **driver** goes online, accepts a job, walks it to the drop-off, and takes a photo.
+- An **admin** (you) approves drivers, watches jobs, edits prices, and reads disputes on a website.
 
-## After merge: first run
+One account is one role. The phone app cannot make an admin. Money is shown in dollars and stored in cents. If Stripe and Google are not connected, the app still runs in **sandbox** mode: distance is estimated, and the payment hold is fake. No card is charged.
 
-This is the path if you have never run a local app. You do not edit code. You install four tools, start the database, then tap through the phone app and the admin site.
+This repository does not submit the app to Apple or Google, and it does not contain live API keys.
 
-1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and leave it running. The whale icon should be steady, not spinning forever.
-2. Install [Node.js 20 or newer](https://nodejs.org/). Open Terminal (Mac) or Command Prompt (Windows) and type `node -v`. You should see a version starting with `v20` or higher.
+## What Dominick must buy/unlock
+
+You can try Heft on your own computer with no accounts. A public release needs the accounts below. Create them yourself. Do not paste secret keys into GitHub.
+
+1. **Apple Developer** — https://developer.apple.com/programs/enroll/  
+   About $99 a year. Unlocks an iPhone build and the App Store. Heft’s iOS id is `com.heft.app`.
+
+2. **Google Play Console** — https://play.google.com/console/signup  
+   A one-time fee. Unlocks an Android build and Play. Heft’s Android id is `com.heft.app`.
+
+3. **Stripe** — https://dashboard.stripe.com/register  
+   Unlocks real card holds and driver payouts. Until the secret key is set on Supabase (not in this repo), publishes stay sandbox and payouts stay pending.
+
+4. **Google Cloud Maps** — https://console.cloud.google.com/google/maps-apis/start  
+   Unlocks driving miles and a map. Until that key is set, Heft uses straight-line miles and a list of Pensacola addresses.
+
+5. **Expo** — https://expo.dev/signup  
+   Unlocks cloud builds of the phone app (`eas build`). The project slug is `heft`.
+
+6. **Supabase** — https://supabase.com/dashboard  
+   Unlocks a cloud database so the phone and the website share real data when you are not on the same Wi‑Fi as your computer. The free project is enough to start.
+
+Draft Privacy Policy and Terms of Service are in the app under Account, and on the website at `/legal/privacy` and `/legal/terms`. They are marked **DRAFT** and are not legal advice. A lawyer should replace them before a store release.
+
+## Local try
+
+You do not edit code. You install four tools, start a database on your computer, then tap through the apps.
+
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and leave it running.
+2. Install [Node.js 20 or newer](https://nodejs.org/). In Terminal, `node -v` should start with `v20` or higher.
 3. Install the [Supabase CLI](https://supabase.com/docs/guides/cli).
-4. Install **Expo Go** on your phone from the App Store or Play Store. The phone and the computer must be on the same Wi‑Fi.
-
-Then, in Terminal:
+4. Install **Expo Go** on your phone. The phone and the computer must be on the same Wi‑Fi.
 
 ```bash
 git clone https://github.com/UpstairsBananaMan/Heft-.git
 cd Heft-
 npm install
 supabase start
-```
-
-The first `supabase start` downloads a local database and can take several minutes. When it finishes:
-
-```bash
 supabase status
 ```
 
-Copy the **API URL** and the **anon key**. Leave Google and Stripe blank. Quotes, publish, accept, and complete still work. Those runs say sandbox and do not charge a card.
-
-Create two files. Do not commit them.
+Copy the API URL and the anon key. Leave Google and Stripe blank.
 
 - Copy `apps/mobile/.env.example` to `apps/mobile/.env`
 - Copy `apps/admin/.env.example` to `apps/admin/.env.local`
 
-Paste the API URL and anon key into both. On a phone, `127.0.0.1` is the phone itself, so replace it in the mobile URL with your computer’s Wi‑Fi address (Mac: System Settings → Network). Example: `http://192.168.1.20:54321`.
+On a phone, replace `127.0.0.1` in the mobile URL with your computer’s Wi‑Fi address. Example: `http://192.168.1.20:54321`.
 
-Open two Terminal windows from the `Heft-` folder:
+Two Terminal windows:
 
 ```bash
 npm run admin
 ```
 
-In a browser, open http://localhost:3000
+Open http://localhost:3000
 
 ```bash
 npm run mobile
 ```
 
-A QR code appears. Android: scan it with Expo Go. iPhone: scan it with the Camera app, then open in Expo Go.
+Scan the QR code with Expo Go (Android) or the Camera app (iPhone).
 
 ### What you tap
 
-1. In Expo Go, sign up as a **customer** with any email and password you invent. Tap **New**, pick two Pensacola stops (skip the one labeled outside the service box), describe the load, tap **Get quote**, then **Authorize hold and publish**. You should see a sandbox notice.
-2. Sign out. Sign up again and choose **Driver**. Save a vehicle, keep the Pensacola center, and use a 25 mile radius.
-3. On the computer, sign in at http://localhost:3000 as `admin@heft.local` / `heft-admin-seed`. Open **Drivers** and tap **Approve**. A line appears saying the driver was approved.
-4. Back in Expo Go, sign in as the driver. Tap **Go online**. The job shows on the list. Tap **Accept**.
-5. Tap the status button for each step (en route, at pickup, en route to drop-off, at drop-off). At drop-off, tap **Take photo** or **Choose from library**. Then **Mark delivered**, then **Complete and record payout**.
-6. **Earnings** shows a pending payout. Admin **Dashboard** and **Revenue** show the platform fee from that job. A `$0.00` means no paid job exists yet.
+1. Sign up as a **customer**. Name, email, phone, and a password of at least 8 characters are required. **New** → two Pensacola stops (skip the one outside the service box) → **Get quote** → **Authorize hold and publish**. You should see a sandbox notice.
+2. Sign out. Sign up as a **Driver**. Add a vehicle. Capacity, bed length, and a radius from 1 to 100 miles are required. You will see **Waiting on approval**. You cannot go online yet.
+3. On the computer, sign in at http://localhost:3000 as `admin@heft.local` / `heft-admin-seed`. Open **Drivers** and tap **Approve**.
+4. In Expo Go, sign in as the driver. Tap **Go online**, then **Accept**.
+5. Walk the status buttons. At drop-off, **Take photo** or **Choose from library**, then **Mark delivered**, then **Complete and record payout**.
+6. Before a driver accepts, the customer can cancel from the job screen. After accept, the customer can cancel until the driver marks at pickup. The driver can cancel only while assigned or on the way to pickup. Either person can open a dispute from the job screen after accept, and for 72 hours after the job is paid.
+7. **Earnings** shows a pending payout. Admin **Dashboard** and **Revenue** show the platform fee. **Revenue → Download CSV** saves the paid jobs. **Disputes** has buttons to investigate, resolve, or close. Closing does not refund a card.
 
-If `supabase start` says Docker is not running, open Docker Desktop and run the command again. To wipe local data and re-seed the admin user: `supabase db reset`.
+If `supabase start` says Docker is not running, open Docker Desktop and try again. To wipe local data and recreate the admin user: `supabase db reset`.
 
-```
-amount = max(min_cents, base_cents + per_mile_cents * miles) * size_multiplier * vehicle_mult
-```
+## Cloud try (Supabase)
 
-`vehicle_mult` is 1. Vehicle class is already priced by the matching `pricing_rules` row (base, per mile, minimum). Platform fee is 15% of the final amount. The driver payout is the remainder.
+Use this when the phone should work away from your computer.
 
-Jobs outside roughly 30.1–30.7 N, 87.6–86.9 W are rejected with “Not in service area yet”.
-
-## Repo
-
-```
-apps/mobile     Expo SDK 53, Expo Router, NativeWind, TanStack Query, Zustand
-apps/admin      Next.js App Router, Tailwind
-packages/shared Job, User, DriverProfile, PricingRule, quote math
-supabase        migrations, RLS, seed, edge functions
-```
-
-## Prerequisites
-
-- Node.js 20+
-- [Supabase CLI](https://supabase.com/docs/guides/cli)
-- Docker (required by `supabase start`)
-- Expo Go or a simulator for the phone app
-
-## Setup
+1. Create a project at https://supabase.com/dashboard
+2. Copy the project ref from the dashboard URL (`https://supabase.com/dashboard/project/YOUR_PROJECT_REF`).
+3. On your computer, from the Heft folder:
 
 ```bash
-npm install
-supabase start
-supabase status
+supabase login
+supabase link --project-ref YOUR_PROJECT_REF
+supabase db push
 ```
 
-Copy the API URL and anon key into both env files:
+`supabase/project.example` is the same checklist. Do not commit the real ref if you want it off GitHub.
+
+4. In the Supabase dashboard, open **Project Settings → API**. Copy the project URL and the **anon** key into the host’s environment. Templates with empty secrets:
+
+- `apps/mobile/.env.production.example`
+- `apps/admin/.env.production.example`
+
+5. Create a normal user in the dashboard (or sign up in the app), then run `supabase/scripts/promote_admin.sql` in the SQL editor after changing the email. Signup cannot grant admin. The database turns an admin role sent at signup into a customer.
+
+6. **Authentication → URL configuration**: allow `heft://auth/callback` and your admin website address. Email confirmation links open the Heft app.
+
+7. Deploy the edge functions (`quote`, `publish-job`, `accept-job`, `update-job-status`, `complete-job`, `stripe-webhook`, `notify`). Leave Stripe and Google secrets unset to stay in sandbox. Set them later with `supabase secrets set` on your machine, not in a file in this repo.
+
+8. Put the admin site on a host that can run Next.js (the `apps/admin` folder) with `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Open `/legal/privacy` to confirm the draft pages are public.
+
+## Store release checklist
+
+Do these in order. This pass does not upload a build.
+
+1. Lawyer replaces the draft Privacy Policy and Terms.
+2. Apple Developer and Google Play accounts are active. Bundle ids stay `com.heft.app`.
+3. Expo account owns the `heft` project. From `apps/mobile`, after `npm install -g eas-cli` and `eas login`:
+   - `eas build --profile preview` for a test install
+   - `eas build --profile production` when you are ready to ship
+4. Set Supabase, and later Stripe and Maps, as **EAS environment variables** for the production profile. Do not put them in `eas.json` or git. Profiles in `apps/mobile/eas.json`: `development`, `preview`, `production`.
+5. Icons and splash in `apps/mobile/assets` are placeholders (charcoal, the word HEFT). Replace them before the store listing.
+6. Hosted Supabase is linked, migrations are pushed, and one admin exists.
+7. Sandbox path still works with the keys missing. Turn on Stripe test mode before live keys.
+8. Play submit profile is set to the **internal** track. Do not run `eas submit` until you mean to.
+
+## For a developer
 
 ```bash
-cp apps/mobile/.env.example apps/mobile/.env
-cp apps/admin/.env.example apps/admin/.env.local
+npm test
+npm run typecheck
+npm run admin
+npm run mobile
 ```
 
-Set `EXPO_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_URL` and the matching anon key. On a physical phone, use your machine’s LAN address instead of `127.0.0.1`. The Android emulator uses `http://10.0.2.2:54321`.
+Quote math lives in `packages/shared`. Sandbox adapters live in `supabase/functions`. GitHub Actions runs typecheck and tests on pull requests.
 
-`supabase start` applies `supabase/migrations` and `supabase/seed.sql`.
+Out of scope: multi-city markets, chat, scheduled windows, dual-role accounts, live Stripe keys in the repo, and store submission.
 
-### Seed (local only)
-
-Seed is configuration, not traffic. It inserts Pensacola `pricing_rules` and one admin. It does not insert jobs, payouts, or revenue.
-
-| | |
-| --- | --- |
-| Email | `admin@heft.local` |
-| Password | `heft-admin-seed` |
-| Role | `admin` |
-
-Sign in with that account on the admin console. Do not treat the password as a production secret.
-
-Hosted projects cannot use the `auth.users` insert. Create the user in the dashboard, then run `supabase/scripts/promote_admin.sql` in the SQL editor after changing the email.
-
-If local seed fails because a GoTrue column name differs, create any user and promote them with that script.
-
-Reset the local database (re-runs migrations and seed):
-
-```bash
-supabase db reset
-```
-
-## Run
-
-```bash
-npm run admin     # http://localhost:3000
-npm run mobile    # Expo dev server
-npm test          # quote, distance, and status rules
-```
-
-## Walkthrough
-
-1. Sign up in the app as a customer. New request → pick two Pensacola presets → Get quote → Authorize hold and publish.
-2. Sign up as a driver (second account). Submit the vehicle with the default Pensacola center and a 25 mile radius.
-3. In admin, open Drivers and approve that vehicle.
-4. In the driver app, go online. The open job appears on the map and in the list. Accept it.
-5. Walk the statuses: en route to pickup, at pickup, en route to drop-off, at drop-off. Upload a proof-of-delivery photo, mark delivered, then complete. Earnings shows a **pending** payout when Stripe Connect is not configured.
-6. Admin dashboard, jobs, and revenue read those rows. Zeros stay zeros until a job exists.
-
-The preset labeled “Outside service box” is there to check the service-area error.
-
-## Optional keys
-
-Leave these blank. Quote, publish, accept, status changes, and complete still run.
-
-| Variable | Where | If missing |
-| --- | --- | --- |
-| `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | `apps/mobile/.env` | Address presets. Map still opens Apple/Google Maps directions by lat/lng. |
-| `GOOGLE_MAPS_API_KEY` | `supabase secrets set` for functions | Distance is haversine miles, returned as `distance_source: "haversine"`. |
-| `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` | mobile | Unused by the sandbox path. The server places the hold. |
-| `STRIPE_SECRET_KEY` | edge functions | PaymentIntent id is `pi_sandbox_<uuid>`. No charge. |
-| `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` | The function acknowledges and does not mutate jobs. `complete-job` records the payout itself. |
-
-With a Stripe **test** secret, publish confirms a manual-capture hold using the test PaymentMethod `pm_card_visa`. If the driver profile has `stripe_connect_account_id`, complete creates a transfer. Otherwise the payout row stays `pending`.
-
-Push uses Expo’s push service and `device_tokens`. A simulator often cannot issue a token; the rest of the app still runs. Enable alerts from Account on a device.
-
-## Edge functions
-
-`quote`, `publish-job`, `accept-job`, `update-job-status`, `complete-job`, `stripe-webhook`, `notify`.
-
-`stripe-webhook` does not verify a Supabase JWT. The others require the signed-in user. `accept_job` is a Postgres function granted only to the service role so the first accept is a single locked update.
-
-## Out of scope
-
-Multi-city markets, chat, scheduled windows, helpers, dual-role accounts, live Stripe keys, and store submission.
-
-## Brand
-
-Charcoal `#1A1D21`, off-white `#F4F1EA`, safety amber `#E8A317`, steel `#5C6670`.
+Brand: charcoal `#1A1D21`, off-white `#F4F1EA`, safety amber `#E8A317`, steel `#5C6670`.

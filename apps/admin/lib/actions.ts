@@ -67,19 +67,19 @@ export async function resolveDispute(formData: FormData) {
   const status = String(formData.get("status") ?? "");
   const notes = String(formData.get("resolution_notes") ?? "").trim();
   const allowed = ["open", "investigating", "resolved_customer", "resolved_driver", "closed"];
-  if (!id || !allowed.includes(status)) return;
+  if (!id || !allowed.includes(status)) redirect("/disputes?notice=invalid");
   const resolved = status !== "open" && status !== "investigating";
-  await gate.supabase
-    .from("disputes")
-    .update({
-      status,
-      resolution_notes: notes || null,
-      resolved_by: resolved ? gate.user.id : null,
-      resolved_at: resolved ? new Date().toISOString() : null,
-    })
-    .eq("id", id);
+  const patch: Record<string, string | null> = {
+    status,
+    resolved_by: resolved ? gate.user.id : null,
+    resolved_at: resolved ? new Date().toISOString() : null,
+  };
+  if (notes) patch.resolution_notes = notes;
+  const { error } = await gate.supabase.from("disputes").update(patch).eq("id", id);
+  if (error) redirect("/disputes?notice=error");
   revalidatePath("/disputes");
   revalidatePath("/jobs");
+  redirect(`/disputes?notice=${status}`);
 }
 
 export async function restoreDisputedJob(formData: FormData) {

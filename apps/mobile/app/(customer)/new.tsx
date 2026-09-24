@@ -13,6 +13,7 @@ import {
   type VehicleType,
 } from "@heft/shared";
 import { BottomNav, Button, Choice, Field, Notice, Screen, Steps } from "../../src/components/ui";
+import { track } from "../../src/lib/analytics";
 import { errorText, invoke } from "../../src/lib/invoke";
 import { uploadJobImage } from "../../src/lib/photos";
 import { supabase } from "../../src/lib/supabase";
@@ -129,6 +130,7 @@ export default function NewJob() {
       }
       setPhotos([]);
       await invoke("quote", { job_id: id });
+      track({ name: "quote_requested" });
       router.push(`/(customer)/quote/${id}`);
     } catch (err) {
       fail(errorText(err));

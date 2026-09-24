@@ -5,6 +5,11 @@ const COPY: Record<string, string> = {
   saved: "Pricing rule saved. The next quote uses these amounts.",
   invalid: "That change was rejected. Check the values and try again.",
   error: "The database rejected that change. Nothing was saved.",
+  investigating: "Dispute marked investigating. No refund was sent.",
+  resolved_customer: "Marked resolved for the customer. Heft does not auto-refund.",
+  resolved_driver: "Marked resolved for the driver. Heft does not auto-refund.",
+  closed: "Dispute closed. No automatic refund was sent.",
+  open: "Dispute set back to open.",
 };
 
 export function Flash({ notice }: { notice?: string }) {

@@ -3,3 +3,6 @@ export * from "./pricing";
 export * from "./geo";
 export * from "./status";
 export * from "./places";
+export * from "./signup";
+export * from "./csv";
+export * from "./legal";

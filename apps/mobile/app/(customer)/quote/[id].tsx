@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SIZE_LABEL, VEHICLE_LABEL, formatUsd, type Job } from "@heft/shared";
 import { Button, EmptyState, Notice, Screen, Steps } from "../../../src/components/ui";
+import { track } from "../../../src/lib/analytics";
 import { errorText, invoke } from "../../../src/lib/invoke";
 import { supabase } from "../../../src/lib/supabase";
 import { toast } from "../../../src/store/toast";
@@ -29,6 +30,7 @@ export default function QuoteConfirm() {
       const result = await invoke<{ sandbox?: boolean }>("publish-job", { job_id: id });
       await queryClient.invalidateQueries({ queryKey: ["job", id] });
       await queryClient.invalidateQueries({ queryKey: ["my-jobs"] });
+      track({ name: "job_published", sandbox: Boolean(result.sandbox) });
       toast(result.sandbox ? "Published with a sandbox payment hold." : "Hold authorized. Job is open.", "ok");
       router.replace(`/(customer)/job/${id}?sandbox=${result.sandbox ? "1" : "0"}`);
     } catch (err) {
