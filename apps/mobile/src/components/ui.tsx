@@ -3,6 +3,8 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, usePathname, type Href } from "expo-router";
 import { STATUS_LABEL, type JobStatus } from "@heft/shared";
+import { demoMode } from "../lib/supabase";
+import { DemoSwitch } from "./DemoSwitch";
 
 export function Screen({
   title,
@@ -27,6 +29,7 @@ export function Screen({
           <Text className="text-[11px] font-semibold tracking-[4px] text-amber">HEFT</Text>
         )}
         <Text className="text-2xl font-semibold text-paper">{title}</Text>
+        {demoMode ? <DemoSwitch /> : null}
       </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: footer ? 120 : 40 }}>
         {children}

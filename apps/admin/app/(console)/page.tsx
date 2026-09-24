@@ -47,7 +47,9 @@ export default async function DashboardPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-steel">Today, UTC</p>
         <h1 className="mt-2 text-3xl font-semibold">Dashboard</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-steel">
-          Counts and revenue are read from this database. There is no sample traffic. A zero means no matching rows.
+          {process.env.NEXT_PUBLIC_DEMO_MODE === "1"
+            ? "These numbers are sample rows labeled Demo. They reset when the demo data file is deleted. No live cards or maps are connected."
+            : "Counts and revenue are read from this database. There is no sample traffic. A zero means no matching rows."}
         </p>
       </header>
       <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -7,3 +7,7 @@ export * from "./signup";
 export * from "./csv";
 export * from "./legal";
 export * from "./copy";
+export * from "./demo/seed";
+export * from "./demo/apply";
+export * from "./demo/query";
+export type { DemoRequest, DemoResult, DemoState, DemoActor } from "./demo/types";

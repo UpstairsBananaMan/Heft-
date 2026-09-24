@@ -12,6 +12,31 @@ One account is one role. The phone app cannot make an admin. Money is shown in d
 
 This repository does not submit the app to Apple or Google, and it does not contain live API keys.
 
+## Click-through demo (no accounts)
+
+Use this when you cannot install Docker or create Supabase, Expo, Stripe, or Maps accounts. Nothing is billed and no card is stored. Every sample row is labeled **Demo**.
+
+```bash
+git clone https://github.com/UpstairsBananaMan/Heft-.git
+cd Heft-
+npm install
+npm run demo:admin
+```
+
+Open http://localhost:3000. The site signs you in as Demo Admin. An amber **Demo data** badge sits under the name.
+
+In a second Terminal window:
+
+```bash
+npm run demo:mobile
+```
+
+Open the web address Expo prints, usually http://localhost:8081. Tap **Review as customer** or **Review as driver**. The amber **Demo** badge at the top switches roles, so one person can post a job and then accept it.
+
+While both are running, a job published on the phone shows up on the website. The website keeps that sample data in `apps/admin/.demo-state.json` (not committed). If the website is closed, the phone keeps its own copy in the browser.
+
+`npm run demo` is a different command. That one still needs local Supabase and loads a smaller SQL sample.
+
 ## What Dominick must buy/unlock
 
 You can try Heft on your own computer with no accounts. A public release needs the accounts below. Create them yourself. Do not paste secret keys into GitHub.

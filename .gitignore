@@ -18,6 +18,8 @@ supabase/.temp
 supabase/.env
 supabase/.project-ref
 
+.demo-state.json
+
 .DS_Store
 *.log
 npm-debug.log*

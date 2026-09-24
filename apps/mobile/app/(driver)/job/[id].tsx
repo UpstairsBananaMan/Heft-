@@ -17,6 +17,7 @@ import {
 import { CancelBox, DisputeBox } from "../../../src/components/JobActions";
 import { Button, EmptyState, ErrorText, Notice, Screen, StatusPill } from "../../../src/components/ui";
 import { track } from "../../../src/lib/analytics";
+import { demoMode } from "../../../src/lib/supabase";
 import { errorText, invoke } from "../../../src/lib/invoke";
 import { uploadJobImage } from "../../../src/lib/photos";
 import { supabase } from "../../../src/lib/supabase";
@@ -100,7 +101,7 @@ export default function DriverJob() {
 
   useEffect(() => {
     const row = job.data;
-    if (!row || !profile || row.driver_id !== profile.id || !isActiveDelivery(row.status)) return;
+    if (Platform.OS === "web" || !row || !profile || row.driver_id !== profile.id || !isActiveDelivery(row.status)) return;
     let timer: ReturnType<typeof setInterval> | undefined;
     async function ping() {
       if (AppState.currentState !== "active") return;
@@ -285,6 +286,27 @@ export default function DriverJob() {
                       {podCount} photo{podCount === 1 ? "" : "s"} attached.
                     </Text>
                   )}
+                  {demoMode ? (
+                    <Button
+                      label="Use sample delivery photo"
+                      onPress={() => {
+                        void (async () => {
+                          const { error: insertError } = await supabase.from("job_photos").insert({
+                            job_id: row.id,
+                            storage_path: `${row.id}/demo-pod.svg`,
+                            kind: "pod",
+                          });
+                          if (insertError) {
+                            fail(new Error(insertError.message));
+                            return;
+                          }
+                          track({ name: "pod_uploaded" });
+                          await refreshPod();
+                          toast("Sample proof photo saved.", "ok");
+                        })();
+                      }}
+                    />
+                  ) : null}
                   <Button label="Take photo" onPress={() => void addPod("camera")} />
                   <Button label="Choose from library" tone="ghost" onPress={() => void addPod("library")} />
                 </>
