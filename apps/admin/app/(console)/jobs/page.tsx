@@ -14,7 +14,11 @@ export default async function JobsPage() {
   return (
     <main>
       <h1 className="text-3xl font-semibold">Jobs</h1>
-      <p className="mt-2 text-sm text-steel">Newest 200 rows. Empty until a customer publishes work.</p>
+      <p className="mt-2 text-sm text-steel">
+        {process.env.NEXT_PUBLIC_DEMO_MODE === "1"
+          ? "Sample jobs are labeled Demo. Open a row to read its timeline."
+          : "Newest 200 rows. Empty until a customer publishes work."}
+      </p>
       <div className="mt-6 overflow-x-auto border border-line bg-white">
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="border-b border-line text-xs uppercase tracking-wider text-steel">

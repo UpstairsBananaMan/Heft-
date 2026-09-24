@@ -2,13 +2,15 @@ import "react-native-url-polyfill/auto";
 import { AppState, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createMobileDemo, demoMode } from "./demo-client";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
 const CHUNK = 1800;
 
-export const supabaseConfigured = Boolean(url && anonKey);
+export { demoMode };
+export const supabaseConfigured = demoMode || Boolean(url && anonKey);
 
 /**
  * Session tokens stay in the device keystore on iOS and Android.
@@ -56,7 +58,7 @@ const authStorage = {
   },
 };
 
-export const supabase = createClient(url || "http://127.0.0.1:54321", anonKey || "missing-anon-key", {
+const liveClient = createClient(url || "http://127.0.0.1:54321", anonKey || "missing-anon-key", {
   auth: {
     storage: authStorage,
     autoRefreshToken: true,
@@ -66,7 +68,9 @@ export const supabase = createClient(url || "http://127.0.0.1:54321", anonKey ||
   },
 });
 
-if (Platform.OS !== "web") {
+export const supabase = (demoMode ? createMobileDemo() : liveClient) as SupabaseClient;
+
+if (!demoMode && Platform.OS !== "web") {
   AppState.addEventListener("change", (state) => {
     if (state === "active") void supabase.auth.startAutoRefresh();
     else void supabase.auth.stopAutoRefresh();

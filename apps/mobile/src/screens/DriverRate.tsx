@@ -3,10 +3,10 @@ import { Pressable, Text, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Job } from "@heft/shared";
-import { Button, ErrorText, Field, Screen } from "../../../src/components/ui";
-import { errorText } from "../../../src/lib/invoke";
-import { supabase } from "../../../src/lib/supabase";
-import { useSession } from "../../../src/store/session";
+import { Button, ErrorText, Field, Screen } from "../components/ui";
+import { errorText } from "../lib/invoke";
+import { supabase } from "../lib/supabase";
+import { useSession } from "../store/session";
 
 export default function DriverRate() {
   const { id } = useLocalSearchParams<{ id: string }>();

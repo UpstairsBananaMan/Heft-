@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~5.0.5",
     "@heft/shared": "*",
     "@react-native-async-storage/async-storage": "2.1.2",
     "@supabase/supabase-js": "^2.49.8",
@@ -26,7 +27,9 @@
     "expo-secure-store": "~14.2.3",
     "expo-status-bar": "~2.2.3",
     "nativewind": "^4.1.23",
+    "query-string": "^7.1.3",
     "react": "19.0.0",
+    "react-dom": "19.0.0",
     "react-native": "0.79.6",
     "react-native-gesture-handler": "~2.24.0",
     "react-native-maps": "1.20.1",
@@ -34,6 +37,7 @@
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
     "react-native-url-polyfill": "^2.0.0",
+    "react-native-web": "^0.20.0",
     "zustand": "^5.0.5"
   },
   "devDependencies": {

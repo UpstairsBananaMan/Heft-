@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { Platform, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 export type MapPin = {
   id: string;
@@ -10,14 +10,6 @@ export type MapPin = {
 };
 
 export function JobMap({ pins, height = 280 }: { pins: MapPin[]; height?: number }) {
-  if (Platform.OS === "web") {
-    return (
-      <View className="justify-center bg-charcoal px-4" style={{ height }}>
-        <Text className="text-sm leading-5 text-paper">Maps render on iOS and Android. Open jobs are listed under the map.</Text>
-      </View>
-    );
-  }
-
   try {
     const maps = require("react-native-maps") as {
       default: ComponentType<Record<string, unknown>>;

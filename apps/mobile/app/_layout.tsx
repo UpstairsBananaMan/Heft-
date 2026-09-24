@@ -23,16 +23,21 @@ export default function RootLayout() {
     const subscription = Linking.addEventListener("url", ({ url }) => {
       void completeAuthFromUrl(url).catch(() => undefined);
     });
-    const opened = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { job_id?: string };
-      const jobId = data?.job_id;
-      if (!jobId) return;
-      const role = useSession.getState().profile?.role;
-      router.push(role === "driver" ? `/(driver)/job/${jobId}` : `/(customer)/job/${jobId}`);
-    });
+    let opened: { remove: () => void } | undefined;
+    try {
+      opened = Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = response.notification.request.content.data as { job_id?: string };
+        const jobId = data?.job_id;
+        if (!jobId) return;
+        const role = useSession.getState().profile?.role;
+        router.push(`/job/${jobId}`);
+      });
+    } catch {
+      opened = undefined;
+    }
     return () => {
       subscription.remove();
-      opened.remove();
+      opened?.remove();
     };
   }, [boot, router]);
 

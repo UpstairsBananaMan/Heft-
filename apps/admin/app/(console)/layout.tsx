@@ -33,6 +33,9 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
         <div className="px-6 py-7">
           <p className="text-xs font-semibold tracking-[0.28em] text-amber">HEFT</p>
           <p className="mt-2 text-sm text-paper/70">{gate.displayName}</p>
+          {process.env.NEXT_PUBLIC_DEMO_MODE === "1" ? (
+            <p className="mt-3 inline-block bg-amber px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-charcoal">Demo data</p>
+          ) : null}
         </div>
         <nav className="flex flex-1 flex-col">
           {LINKS.map(([href, label]) => (

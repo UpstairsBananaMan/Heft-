@@ -3,6 +3,8 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, usePathname, type Href } from "expo-router";
 import { STATUS_LABEL, type JobStatus } from "@heft/shared";
+import { demoMode } from "../lib/supabase";
+import { DemoSwitch } from "./DemoSwitch";
 
 export function Screen({
   title,
@@ -17,7 +19,7 @@ export function Screen({
 }) {
   const router = useRouter();
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F4F1EA" }}>
+    <SafeAreaView style={{ flex: 1, height: "100%", width: "100%", backgroundColor: "#F4F1EA" }}>
       <View className="bg-charcoal px-5 pb-4 pt-2">
         {back ? (
           <Pressable onPress={() => router.back()} className="mb-2 self-start py-2">
@@ -27,6 +29,7 @@ export function Screen({
           <Text className="text-[11px] font-semibold tracking-[4px] text-amber">HEFT</Text>
         )}
         <Text className="text-2xl font-semibold text-paper">{title}</Text>
+        {demoMode ? <DemoSwitch /> : null}
       </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: footer ? 120 : 40 }}>
         {children}
@@ -182,7 +185,8 @@ export function BottomNav({ items }: { items: { href: Href; label: string }[] })
   return (
     <View className="absolute bottom-0 left-0 right-0 flex-row border-t border-line bg-paper">
       {items.map((item) => {
-        const active = pathname === item.href;
+        const bare = String(item.href).replace(/\/\([^)]+\)/g, "");
+        const active = pathname === item.href || pathname === bare;
         return (
           <Pressable key={item.label} onPress={() => router.replace(item.href)} className="flex-1 items-center py-4">
             <Text className={`text-xs font-semibold uppercase tracking-wider ${active ? "text-charcoal" : "text-steel"}`}>

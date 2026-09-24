@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { demoModeEnabled } from "./demo-store";
 import { createClient } from "./supabase/server";
 
 export function supabaseConfigured(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  return demoModeEnabled() || Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 }
 
 export async function requireAdmin(): Promise<
@@ -11,6 +12,10 @@ export async function requireAdmin(): Promise<
   | { configured: true; supabase: SupabaseClient; user: User; displayName: string }
 > {
   if (!supabaseConfigured()) return { configured: false };
+  if (demoModeEnabled()) {
+    const supabase = await createClient();
+    return { configured: true, supabase, user: { id: "a0000000-0000-4000-8000-000000000001" } as User, displayName: "Demo Admin" };
+  }
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   if (!data.user) redirect("/login");

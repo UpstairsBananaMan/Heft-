@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { supabaseConfigured } from "./supabase";
+import { demoMode, supabaseConfigured } from "./supabase";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 
 export function useOnline(): boolean {
   const [online, setOnline] = useState(true);
   useEffect(() => {
-    if (!supabaseConfigured || !url) return;
+    if (demoMode || !supabaseConfigured || !url) return;
     let stop = false;
     async function ping() {
       const controller = new AbortController();

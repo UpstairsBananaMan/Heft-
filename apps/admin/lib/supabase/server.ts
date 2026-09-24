@@ -1,7 +1,9 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { createAdminDemoClient, demoModeEnabled } from "../demo-store";
 
 export async function createClient() {
+  if (demoModeEnabled()) return createAdminDemoClient() as unknown as Awaited<ReturnType<typeof createServerClient>>;
   const cookieStore = await cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

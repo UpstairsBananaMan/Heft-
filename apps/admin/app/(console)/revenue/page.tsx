@@ -19,8 +19,9 @@ export default async function RevenuePage() {
     <main>
       <h1 className="text-3xl font-semibold">Revenue</h1>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-steel">
-        Totals are the sum of paid jobs in this project. Seed data does not include jobs, so a fresh database shows
-        zero until a delivery is completed.
+        {process.env.NEXT_PUBLIC_DEMO_MODE === "1"
+          ? "Totals add the sample paid jobs labeled Demo. Completing a delivery in the phone demo adds another row. No card is charged."
+          : "Totals are the sum of paid jobs in this project. Seed data does not include jobs, so a fresh database shows zero until a delivery is completed."}
       </p>
       <p className="mt-4">
         <a href="/revenue/export" className="text-sm font-semibold underline">

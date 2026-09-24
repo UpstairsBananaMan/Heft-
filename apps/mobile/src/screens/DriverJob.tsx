@@ -14,14 +14,15 @@ import {
   type JobEvent,
   type JobStatus,
 } from "@heft/shared";
-import { CancelBox, DisputeBox } from "../../../src/components/JobActions";
-import { Button, EmptyState, ErrorText, Notice, Screen, StatusPill } from "../../../src/components/ui";
-import { track } from "../../../src/lib/analytics";
-import { errorText, invoke } from "../../../src/lib/invoke";
-import { uploadJobImage } from "../../../src/lib/photos";
-import { supabase } from "../../../src/lib/supabase";
-import { useSession } from "../../../src/store/session";
-import { toast } from "../../../src/store/toast";
+import { CancelBox, DisputeBox } from "../components/JobActions";
+import { Button, EmptyState, ErrorText, Notice, Screen, StatusPill } from "../components/ui";
+import { track } from "../lib/analytics";
+import { demoMode } from "../lib/supabase";
+import { errorText, invoke } from "../lib/invoke";
+import { uploadJobImage } from "../lib/photos";
+import { supabase } from "../lib/supabase";
+import { useSession } from "../store/session";
+import { toast } from "../store/toast";
 
 const RAIL: { key: JobStatus; label: string }[] = [
   { key: "assigned", label: "Assigned" },
@@ -100,7 +101,7 @@ export default function DriverJob() {
 
   useEffect(() => {
     const row = job.data;
-    if (!row || !profile || row.driver_id !== profile.id || !isActiveDelivery(row.status)) return;
+    if (Platform.OS === "web" || !row || !profile || row.driver_id !== profile.id || !isActiveDelivery(row.status)) return;
     let timer: ReturnType<typeof setInterval> | undefined;
     async function ping() {
       if (AppState.currentState !== "active") return;
@@ -285,6 +286,27 @@ export default function DriverJob() {
                       {podCount} photo{podCount === 1 ? "" : "s"} attached.
                     </Text>
                   )}
+                  {demoMode ? (
+                    <Button
+                      label="Use sample delivery photo"
+                      onPress={() => {
+                        void (async () => {
+                          const { error: insertError } = await supabase.from("job_photos").insert({
+                            job_id: row.id,
+                            storage_path: `${row.id}/demo-pod.svg`,
+                            kind: "pod",
+                          });
+                          if (insertError) {
+                            fail(new Error(insertError.message));
+                            return;
+                          }
+                          track({ name: "pod_uploaded" });
+                          await refreshPod();
+                          toast("Sample proof photo saved.", "ok");
+                        })();
+                      }}
+                    />
+                  ) : null}
                   <Button label="Take photo" onPress={() => void addPod("camera")} />
                   <Button label="Choose from library" tone="ghost" onPress={() => void addPod("library")} />
                 </>
@@ -304,7 +326,7 @@ export default function DriverJob() {
                 />
               ) : null}
               {row.status === "paid" ? (
-                <Button label="Rate customer" onPress={() => router.push(`/(driver)/rate/${row.id}`)} />
+                <Button label="Rate customer" onPress={() => router.push(`/rate/${row.id}`)} />
               ) : null}
             </>
           ) : null}
