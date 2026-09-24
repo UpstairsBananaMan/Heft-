@@ -1,5 +1,7 @@
 import type { DemoState } from "./types";
 
+export const DEMO_SCHEMA_VERSION = 2;
+
 export const DEMO_IDS = {
   admin: "a0000000-0000-4000-8000-000000000001",
   customer: "b0000000-0000-4000-8000-000000000002",
@@ -58,6 +60,7 @@ export function createDemoState(now = new Date().toISOString()): DemoState {
   );
 
   return {
+    schema_version: DEMO_SCHEMA_VERSION,
     users: [
       user(DEMO_IDS.admin, "admin", "Dominick", "8505550100", now),
       user(DEMO_IDS.customer, "customer", "Dana R.", "8505550101", now),

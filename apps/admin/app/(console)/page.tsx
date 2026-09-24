@@ -58,6 +58,21 @@ export default async function DashboardPage() {
   const hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const first = displayName.split(" ")[0];
 
+  const yesterday = new Date(start);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const { data: opened, error: openedError } = await supabase
+    .from("job_events")
+    .select("created_at")
+    .eq("type", "open")
+    .gte("created_at", yesterday.toISOString());
+  const openDelta = openedError || !opened
+    ? null
+    : (() => {
+        const todayCount = opened.filter((event) => event.created_at >= start.toISOString()).length;
+        const delta = todayCount - (opened.length - todayCount);
+        return `${delta > 0 ? "+" : ""}${delta} vs. yesterday`;
+      })();
+
   const finding = countOf("open");
   const inProgress = countOf("assigned") + countOf("en_route_pickup") + countOf("at_pickup") + countOf("en_route_dropoff") + countOf("at_dropoff");
   const delivered = countOf("delivered") + countOf("paid");
@@ -92,7 +107,7 @@ export default async function DashboardPage() {
       </div>
 
       <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Kpi label="Open jobs" value={String(finding)} detail="+ vs. yesterday" />
+        <Kpi label="Open jobs" value={String(finding)} detail={openDelta} />
         <Kpi label="Revenue today" value={formatUsd(todayRevenue)} detail={`${APP_NAME}'s share ${formatUsd(todayFee)}`} />
         <Kpi label="Drivers online" value={String(online ?? 0)} detail={`${approved ?? 0} approved · ${pendingDrivers ?? 0} pending`} />
         <Kpi label="Open disputes" value={String(openDisputes ?? 0)} detail="Needs a decision" warn />
@@ -188,12 +203,12 @@ export default async function DashboardPage() {
   );
 }
 
-function Kpi({ label, value, detail, warn }: { label: string; value: string; detail: string; warn?: boolean }) {
+function Kpi({ label, value, detail, warn }: { label: string; value: string; detail: string | null; warn?: boolean }) {
   return (
     <article className="rounded-2xl border border-sand-200 bg-white p-5">
       <p className="text-sm text-steel">{label}</p>
       <p className="mt-2 font-[family-name:var(--font-display)] text-4xl font-extrabold">{value}</p>
-      <p className={`mt-2 text-sm ${warn ? "text-red-700" : "text-steel"}`}>{detail}</p>
+      {detail ? <p className={`mt-2 text-sm ${warn ? "text-red-700" : "text-steel"}`}>{detail}</p> : null}
     </article>
   );
 }

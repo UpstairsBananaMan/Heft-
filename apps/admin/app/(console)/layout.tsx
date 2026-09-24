@@ -38,7 +38,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
-      <aside className="flex flex-col bg-charcoal text-paper lg:min-h-screen">
+      <aside className="flex flex-col bg-charcoal text-paper lg:sticky lg:top-0 lg:h-screen">
         <div className="px-5 py-6">
           <p className="text-lg font-extrabold tracking-tight">
             {APP_WORDMARK}
@@ -46,7 +46,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
           </p>
           <p className="mt-1 text-sm text-paper/70">Ops console · Pensacola</p>
         </div>
-        <nav className="flex flex-1 flex-col gap-1 px-3">
+        <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3">
           {LINKS.map(([href, label]) => (
             <Link key={href} href={href} className="rounded-xl px-3 py-3 text-sm hover:bg-ink-800">
               {label}

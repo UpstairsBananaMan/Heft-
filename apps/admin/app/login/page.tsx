@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { APP_NAME } from "@heft/shared";
 import { createClient } from "@/lib/supabase/client";
 
 function LoginForm() {
@@ -36,7 +37,7 @@ function LoginForm() {
     <main className="grid min-h-screen lg:grid-cols-[420px_1fr]">
       <section className="flex flex-col justify-between bg-charcoal px-10 py-12 text-paper">
         <div>
-          <p className="text-xs font-semibold tracking-[0.28em] text-amber">HEFT</p>
+          <p className="text-xs font-semibold tracking-[0.28em] text-amber">{APP_NAME.toUpperCase()}</p>
           <h1 className="mt-6 text-4xl font-semibold leading-tight">Dispatch console</h1>
           <p className="mt-4 max-w-xs text-sm leading-6 text-paper/70">
             Jobs, driver approval, pricing, and disputes for Pensacola bulky freight.

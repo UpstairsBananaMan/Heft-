@@ -1,18 +1,18 @@
-import type { DemoRequest } from "@heft/shared";
+import { DEMO_CORS_HEADERS, demoErrorResult, type DemoRequest } from "@heft/shared";
 import { runDemo } from "@/lib/demo-store";
 
-const headers = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const headers = DEMO_CORS_HEADERS;
 
 export function OPTIONS() {
   return new Response(null, { headers });
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as DemoRequest;
-  const result = runDemo(body);
-  return Response.json(result, { headers });
+  try {
+    const body = (await request.json()) as DemoRequest;
+    const result = runDemo(body);
+    return Response.json(result, { headers });
+  } catch (error) {
+    return Response.json(demoErrorResult(error), { status: 500, headers });
+  }
 }

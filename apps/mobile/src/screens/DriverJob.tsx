@@ -2,13 +2,16 @@ import { useState } from "react";
 import { Linking, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft, Check, Clock, MessageCircle, Phone } from "lucide-react-native";
+import { ArrowLeft, Check, Clock, MessageCircle, Phone, Star } from "lucide-react-native";
 import {
   DRIVER_ACTION,
   formatUsd,
   haversineMiles,
   neighbourhood,
   nextDriverStatus,
+  payoutAnnounce,
+  payoutCaption,
+  payoutPhase,
   type Job,
   type JobStatus,
 } from "@heft/shared";
@@ -234,6 +237,16 @@ function PayoutMoment({
   miles: number;
   onDone: () => void;
 }) {
+  const profile = useSession((state) => state.profile);
+  const setup = useQuery({
+    queryKey: ["payout-setup", profile?.id],
+    enabled: Boolean(profile?.id),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("driver_profiles").select("stripe_connect_account_id").eq("user_id", profile!.id).maybeSingle();
+      if (error) throw error;
+      return Boolean((data as { stripe_connect_account_id?: string | null } | null)?.stripe_connect_account_id);
+    },
+  });
   const payouts = useQuery({
     queryKey: ["payout-status", jobId],
     queryFn: async () => {
@@ -243,15 +256,31 @@ function PayoutMoment({
     },
   });
   const mine = (payouts.data ?? []).find((row) => row.job_id === jobId);
-  const landed = mine?.status === "paid";
+  const phase = payoutPhase({ setupComplete: Boolean(setup.data), status: mine?.status });
+  const caption = payoutCaption(phase);
   const today = (payouts.data ?? []).reduce((sum, row) => sum + (row.amount_cents ?? 0), 0) || cents;
   const delight = useDelight({
     jobId,
     moment: "payout",
-    announce: landed ? `${formatUsd(cents)} paid` : `${formatUsd(cents)} on its way to your account`,
-    enabled: true,
+    announce: payoutAnnounce(formatUsd(cents), phase),
+    enabled: setup.isSuccess && payouts.isSuccess,
   });
-  const [stars, setStars] = useState(false);
+  const [score, setScore] = useState(0);
+  const [rated, setRated] = useState(false);
+  async function rateCustomer(value: number) {
+    if (rated || !profile) return;
+    setScore(value);
+    const { data } = await supabase.from("jobs").select("customer_id").eq("id", jobId).maybeSingle();
+    const customerId = (data as { customer_id?: string } | null)?.customer_id;
+    if (!customerId) return;
+    const { error } = await supabase.from("ratings").insert({
+      job_id: jobId,
+      from_user_id: profile.id,
+      to_user_id: customerId,
+      stars: value,
+    });
+    if (!error) setRated(true);
+  }
   return (
     <View style={{ flex: 1, backgroundColor: C.ink }}>
       <Confetti count={20} play={delight.playing && !delight.reduced} />
@@ -262,8 +291,8 @@ function PayoutMoment({
         <Text style={{ marginTop: 16, color: "#C8C2B8", fontFamily: font.medium, fontSize: 14 }}>Delivery complete</Text>
         <CountUp cents={cents} play={delight.playing && !delight.reduced} prefix="+" color={C.paper} />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 }}>
-          {landed ? <Check color="#F2C45A" size={16} /> : <Clock color="#F2C45A" size={16} />}
-          <Text style={{ color: "#F2C45A", fontFamily: font.semi, fontSize: 16 }}>{landed ? "Paid" : "On its way to your account"}</Text>
+          {phase === "paid" ? <Check color="#F2C45A" size={16} /> : <Clock color="#F2C45A" size={16} />}
+          <Text style={{ color: "#F2C45A", fontFamily: font.semi, fontSize: 16 }}>{caption}</Text>
         </View>
         <View style={{ marginTop: 12, backgroundColor: "#24282D", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, flexDirection: "row", alignItems: "center" }}>
           <Text style={{ color: C.paper, fontFamily: font.semi, fontSize: 14 }}>Today </Text>
@@ -277,9 +306,22 @@ function PayoutMoment({
       </View>
       <View pointerEvents={delight.locked ? "none" : "auto"} style={{ padding: 20, zIndex: 3 }}>
         <PrimaryButton label="Back to jobs" onPress={onDone} />
-        <Pressable onPress={() => setStars(true)} style={{ minHeight: 48, marginTop: 8, borderRadius: 16, borderWidth: 1.5, borderColor: "#3A3424", alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ color: C.paper, fontFamily: font.semi, fontSize: 16 }}>{stars ? "Thanks" : "Rate the customer"}</Text>
-        </Pressable>
+        <View style={{ minHeight: 48, marginTop: 8, alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: C.paper, fontFamily: font.semi, fontSize: 16, marginBottom: 4 }}>{rated ? "Thanks" : "Rate the customer"}</Text>
+          <View style={{ flexDirection: "row" }}>
+            {[1, 2, 3, 4, 5].map((value) => (
+              <Pressable
+                key={value}
+                accessibilityLabel={`${value} star${value === 1 ? "" : "s"} for the customer`}
+                disabled={rated}
+                onPress={() => void rateCustomer(value)}
+                style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
+              >
+                <Star color="#F2C45A" fill={value <= score ? "#F2C45A" : "transparent"} size={26} />
+              </Pressable>
+            ))}
+          </View>
+        </View>
       </View>
       <SkipLayer active={delight.playing} onSkip={delight.skip} onDark />
     </View>

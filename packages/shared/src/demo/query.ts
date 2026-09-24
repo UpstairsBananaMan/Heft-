@@ -63,5 +63,11 @@ export function createDemoQuery(run: Run) {
     return self;
   }
 
-  return { from };
+  function rpc(name: string, args?: Record<string, unknown>) {
+    const body = { ...(args ?? {}) };
+    if (name === "assigned_driver_card") body.job_id = args?.p_job_id ?? args?.job_id;
+    return Promise.resolve(run({ kind: "invoke", name, body }));
+  }
+
+  return { from, rpc };
 }

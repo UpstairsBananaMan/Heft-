@@ -18,7 +18,6 @@ import { Confetti, PulseRing, SkipLayer, useDelight } from "../components/deligh
 import { LookingIllustration, WavingIllustration, Illustration } from "../components/Illustration";
 import { C, font, PrimaryButton } from "../components/v2";
 import { haptic } from "../lib/haptics";
-import { invoke } from "../lib/invoke";
 import { demoMode, supabase } from "../lib/supabase";
 import type { IllustrationName } from "../illustrations/markup";
 
@@ -61,7 +60,11 @@ export default function CustomerJob() {
   const card = useQuery({
     queryKey: ["driver-card", id],
     enabled: Boolean(job.data?.driver_id),
-    queryFn: () => invoke<Card | null>("assigned_driver_card", { job_id: id }),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("assigned_driver_card", { p_job_id: id });
+      if (error) throw error;
+      return (data ?? null) as Card | null;
+    },
   });
   const row = job.data;
   const index = row ? stepIndex(row.status) : 0;

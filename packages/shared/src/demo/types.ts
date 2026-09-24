@@ -3,6 +3,7 @@ import type { Role } from "../types";
 export type DemoRow = Record<string, unknown>;
 
 export type DemoState = {
+  schema_version: number;
   users: DemoRow[];
   customer_profiles: DemoRow[];
   driver_profiles: DemoRow[];

@@ -32,7 +32,7 @@ export default function RateJob() {
         const driver = (data as { driver_id: string | null } | null)?.driver_id ?? null;
         setDriverId(driver);
         if (!driver) return;
-        const { data: card, error } = await supabase.functions.invoke("assigned_driver_card", { body: { job_id: id } });
+        const { data: card, error } = await supabase.rpc("assigned_driver_card", { p_job_id: id });
         const display = !error && card && typeof card === "object" ? (card as { display_name?: string }).display_name : undefined;
         if (display) setName(display.split(" ")[0]);
         const job = await supabase.from("jobs").select("item_description,size_category,pickup_address,dropoff_address,delivered_at").eq("id", id).maybeSingle();

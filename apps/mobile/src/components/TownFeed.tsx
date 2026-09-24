@@ -10,8 +10,6 @@ import { haptic } from "../lib/haptics";
 import type { IllustrationName } from "../illustrations/markup";
 import { ILLUSTRATIONS } from "../illustrations/markup";
 
-const CARD_HEIGHT = 292;
-
 export function TownFeed({ onMoveLike, onTop }: { onMoveLike: (post: FeedPost) => void; onTop: () => void }) {
   const [zoom, setZoom] = useState<{ name: IllustrationName; label: string } | null>(null);
   const feed = useQuery({
@@ -83,7 +81,7 @@ function FeedCard({
   const after = isArt(post.after_key);
   const stars = showStarRating(Number(post.rating_count ?? 0));
   return (
-    <View accessibilityLabel={summary} style={{ marginTop: 12, backgroundColor: C.white, borderRadius: 18, borderWidth: 1, borderColor: C.sand200, padding: 12, minHeight: CARD_HEIGHT }}>
+    <View accessibilityLabel={summary} style={{ marginTop: 12, backgroundColor: C.white, borderRadius: 18, borderWidth: 1, borderColor: C.sand200, padding: 12 }}>
       <View style={{ flexDirection: "row", gap: 8 }}>
         <Photo
           art={before}
