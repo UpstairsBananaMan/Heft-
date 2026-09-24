@@ -10,6 +10,10 @@ export const PENSACOLA_CENTER = { lat: 30.4213, lng: -87.2169 };
 
 const EARTH_MILES = 3958.7613;
 
+export function serviceAreaHint(): string {
+  return "That spot is outside Pensacola. Heft covers about 30.1–30.7 north and 87.6–86.9 west.";
+}
+
 export function inPensacola(lat: number, lng: number): boolean {
   return (
     Number.isFinite(lat) &&

@@ -1,11 +1,10 @@
 import { ReactNode, useState } from "react";
-import { Platform, Text } from "react-native";
-import * as Device from "expo-device";
-import * as Notifications from "expo-notifications";
+import { Linking, Text } from "react-native";
 import { useRouter } from "expo-router";
 import { isValidPhone } from "@heft/shared";
 import { Button, ErrorText, Field, Notice, Screen } from "../components/ui";
-import { errorText } from "../lib/invoke";
+import { errorText, invoke } from "../lib/invoke";
+import { registerForJobAlerts } from "../lib/push";
 import { supabase } from "../lib/supabase";
 import { useSession } from "../store/session";
 
@@ -51,28 +50,22 @@ export function AccountScreen({
   async function enablePush() {
     setError("");
     setMessage("");
+    if (!profile) return;
+    const result = await registerForJobAlerts(profile.id);
+    if (!result.ok) {
+      setMessage(result.message);
+      return;
+    }
+    setMessage("This phone will get job alerts when a status changes.");
+  }
+
+  async function setupPayouts() {
+    setError("");
+    setMessage("");
     try {
-      if (!profile) return;
-      if (Platform.OS !== "ios" && Platform.OS !== "android") {
-        throw new Error("Push tokens are stored for iOS and Android.");
-      }
-      if (!Device.isDevice) throw new Error("Use a physical device for an Expo push token.");
-      const current = await Notifications.getPermissionsAsync();
-      const granted =
-        current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
-      if (granted.status !== "granted") throw new Error("Notification permission denied.");
-      const token = await Notifications.getExpoPushTokenAsync();
-      const { error: upsertError } = await supabase.from("device_tokens").upsert(
-        {
-          user_id: profile.id,
-          token: token.data,
-          platform: Platform.OS,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,token" },
-      );
-      if (upsertError) throw upsertError;
-      setMessage("This device will get job alerts.");
+      const result = await invoke<{ sandbox?: boolean; url?: string | null; message?: string }>("connect-onboarding", {});
+      if (result.message) setMessage(result.message);
+      if (result.url) await Linking.openURL(result.url);
     } catch (err) {
       setError(errorText(err));
     }
@@ -87,7 +80,13 @@ export function AccountScreen({
       {message ? <Notice>{message}</Notice> : null}
       <Button label="Save profile" onPress={save} />
       <ViewGap />
-      <Button label="Enable job alerts" tone="charcoal" onPress={enablePush} />
+      <Button label="Enable job alerts" tone="charcoal" onPress={() => void enablePush()} />
+      <Text className="mb-3 text-xs leading-5 text-steel">
+        Alerts stay off until an Expo project id is configured. Without it, this button explains why and does not crash.
+      </Text>
+      {profile?.role === "driver" ? (
+        <Button label="Set up payouts" tone="charcoal" onPress={() => void setupPayouts()} />
+      ) : null}
       {profile?.role === "driver" ? (
         <>
           <ViewGap />

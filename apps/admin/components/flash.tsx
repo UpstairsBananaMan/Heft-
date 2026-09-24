@@ -10,6 +10,7 @@ const COPY: Record<string, string> = {
   resolved_driver: "Marked resolved for the driver. Heft does not auto-refund.",
   closed: "Dispute closed. No automatic refund was sent.",
   open: "Dispute set back to open.",
+  restored: "Job status restored. No refund was sent.",
 };
 
 export function Flash({ notice }: { notice?: string }) {

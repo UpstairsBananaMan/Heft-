@@ -70,6 +70,35 @@ export async function createTransfer(
   return id;
 }
 
+/** Express Connect onboarding. Returns nulls when Stripe is not configured. */
+export async function connectOnboardingLink(input: {
+  accountId: string | null;
+  userId: string;
+  returnUrl: string;
+  refreshUrl: string;
+}): Promise<{ accountId: string; url: string } | null> {
+  if (!stripeConfigured()) return null;
+  let accountId = input.accountId;
+  if (!accountId) {
+    const account = await stripeFetch("accounts", {
+      type: "express",
+      country: "US",
+      "capabilities[transfers][requested]": "true",
+      "metadata[user_id]": input.userId,
+    });
+    if (typeof account.id !== "string") throw new HttpError(502, "Stripe did not return a Connect account");
+    accountId = account.id;
+  }
+  const link = await stripeFetch("account_links", {
+    account: accountId,
+    refresh_url: input.refreshUrl,
+    return_url: input.returnUrl,
+    type: "account_onboarding",
+  });
+  if (typeof link.url !== "string") throw new HttpError(502, "Stripe did not return an onboarding link");
+  return { accountId, url: link.url };
+}
+
 export async function verifyStripeSignature(raw: string, header: string | null): Promise<boolean> {
   const secret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
   if (!secret || !header) return false;

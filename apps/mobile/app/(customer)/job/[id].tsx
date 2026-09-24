@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { Linking, Platform, Text } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { formatUsd, type DriverProfile, type Job, type JobEvent } from "@heft/shared";
+import { formatUsd, loadFailureCopy, type DriverProfile, type Job, type JobEvent } from "@heft/shared";
 import { JobMap } from "../../../src/components/JobMap";
 import { CancelBox, DisputeBox } from "../../../src/components/JobActions";
-import { Button, Notice, Screen, StatusPill } from "../../../src/components/ui";
+import { Button, EmptyState, Notice, Screen, StatusPill } from "../../../src/components/ui";
 import { supabase } from "../../../src/lib/supabase";
 import { useSession } from "../../../src/store/session";
 
@@ -94,7 +94,13 @@ export default function CustomerJob() {
   return (
     <Screen title="Job" back>
       {sandbox === "1" ? <Notice>Payment hold is a sandbox PaymentIntent. No card was charged.</Notice> : null}
-      {!row ? <Text className="text-sm text-steel">Loading.</Text> : null}
+      {job.isLoading ? <EmptyState title="Loading job" body="Fetching the latest status." /> : null}
+      {job.isError ? (
+        <EmptyState title={loadFailureCopy((job.error as Error).message).title} body={loadFailureCopy((job.error as Error).message).body} />
+      ) : null}
+      {!job.isLoading && !job.isError && !row ? (
+        <EmptyState title="Job not found" body="This request is not on your account." />
+      ) : null}
       {row ? (
         <>
           <StatusPill status={row.status} />

@@ -1,7 +1,7 @@
 import { Pressable, Text } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { formatUsd, type Job } from "@heft/shared";
+import { formatUsd, loadFailureCopy, type Job } from "@heft/shared";
 import { BottomNav, Button, EmptyState, Screen, StatusPill } from "../../src/components/ui";
 import { supabase } from "../../src/lib/supabase";
 import { toast } from "../../src/store/toast";
@@ -24,7 +24,7 @@ export default function CustomerHome() {
   });
 
   const rows = jobs.data ?? [];
-  const failed = jobs.error ? (jobs.error as Error).message : "";
+  const failed = jobs.error ? loadFailureCopy((jobs.error as Error).message) : null;
 
   return (
     <Screen title="Your jobs" footer={<BottomNav items={NAV} />}>
@@ -36,7 +36,8 @@ export default function CustomerHome() {
       >
         <Text className="text-xs font-semibold uppercase tracking-wider text-steel">Refresh</Text>
       </Pressable>
-      {failed ? <EmptyState title="Could not load jobs" body={failed} /> : null}
+      {jobs.isLoading ? <EmptyState title="Loading jobs" body="Fetching your requests." /> : null}
+      {failed ? <EmptyState title={failed.title} body={failed.body} /> : null}
       {!failed && jobs.isSuccess && rows.length === 0 ? (
         <>
           <EmptyState title="No jobs yet" body="Post a pickup and drop-off. You will see a price before anyone is dispatched." />

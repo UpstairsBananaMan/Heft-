@@ -67,7 +67,8 @@ export async function resolveDispute(formData: FormData) {
   const status = String(formData.get("status") ?? "");
   const notes = String(formData.get("resolution_notes") ?? "").trim();
   const allowed = ["open", "investigating", "resolved_customer", "resolved_driver", "closed"];
-  if (!id || !allowed.includes(status)) redirect("/disputes?notice=invalid");
+  const returnTo = safeNext(String(formData.get("return_to") ?? ""), "/disputes");
+  if (!id || !allowed.includes(status)) redirect(`${returnTo}?notice=invalid`);
   const resolved = status !== "open" && status !== "investigating";
   const patch: Record<string, string | null> = {
     status,
@@ -76,17 +77,24 @@ export async function resolveDispute(formData: FormData) {
   };
   if (notes) patch.resolution_notes = notes;
   const { error } = await gate.supabase.from("disputes").update(patch).eq("id", id);
-  if (error) redirect("/disputes?notice=error");
+  if (error) redirect(`${returnTo}?notice=error`);
   revalidatePath("/disputes");
   revalidatePath("/jobs");
-  redirect(`/disputes?notice=${status}`);
+  revalidatePath(returnTo);
+  redirect(`${returnTo}?notice=${status}`);
+}
+
+function safeNext(raw: string, fallback: string): string {
+  const path = raw.split("?")[0];
+  if (path === "/disputes" || /^\/jobs\/[0-9a-f-]{36}$/i.test(path)) return path;
+  return fallback;
 }
 
 export async function restoreDisputedJob(formData: FormData) {
   const gate = await requireAdmin();
   if (!gate.configured) return;
   const jobId = String(formData.get("job_id") ?? "");
-  if (!jobId) return;
+  if (!jobId) redirect("/jobs?notice=invalid");
   const { data: events } = await gate.supabase
     .from("job_events")
     .select("payload")
@@ -95,9 +103,12 @@ export async function restoreDisputedJob(formData: FormData) {
     .order("created_at", { ascending: false })
     .limit(1);
   const previous = events?.[0]?.payload?.previous_status;
-  if (typeof previous !== "string" || !JOB_STATUSES.includes(previous as (typeof JOB_STATUSES)[number])) return;
-  if (previous === "disputed" || previous === "cancelled") return;
-  await gate.supabase.from("jobs").update({ status: previous }).eq("id", jobId).eq("status", "disputed");
+  if (typeof previous !== "string" || !JOB_STATUSES.includes(previous as (typeof JOB_STATUSES)[number])) {
+    redirect(`/jobs/${jobId}?notice=invalid`);
+  }
+  if (previous === "disputed" || previous === "cancelled") redirect(`/jobs/${jobId}?notice=invalid`);
+  const { error } = await gate.supabase.from("jobs").update({ status: previous }).eq("id", jobId).eq("status", "disputed");
+  if (error) redirect(`/jobs/${jobId}?notice=error`);
   await gate.supabase.from("job_events").insert({
     job_id: jobId,
     type: "status_restored",
@@ -106,4 +117,5 @@ export async function restoreDisputedJob(formData: FormData) {
   });
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath("/disputes");
+  redirect(`/jobs/${jobId}?notice=restored`);
 }

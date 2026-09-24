@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Text, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { SIZE_LABEL, VEHICLE_LABEL, formatUsd, type Job } from "@heft/shared";
+import { SIZE_LABEL, VEHICLE_LABEL, formatUsd, loadFailureCopy, type Job } from "@heft/shared";
 import { Button, EmptyState, Notice, Screen, Steps } from "../../../src/components/ui";
 import { track } from "../../../src/lib/analytics";
 import { errorText, invoke } from "../../../src/lib/invoke";
@@ -44,8 +44,10 @@ export default function QuoteConfirm() {
   return (
     <Screen title="Quote" back>
       <Steps labels={["Stops", "Load", "Price"]} current={2} />
-      {job.isLoading ? <Text className="text-sm text-steel">Loading the quote.</Text> : null}
-      {job.error ? <EmptyState title="Quote unavailable" body={(job.error as Error).message} /> : null}
+      {job.isLoading ? <EmptyState title="Loading the quote" body="The price appears after the server measures the stops." /> : null}
+      {job.error ? (
+        <EmptyState title={loadFailureCopy((job.error as Error).message).title} body={loadFailureCopy((job.error as Error).message).body} />
+      ) : null}
       {row ? (
         <>
           <Text className="text-lg font-semibold text-charcoal">{row.item_description}</Text>

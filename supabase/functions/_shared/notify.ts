@@ -73,6 +73,7 @@ export async function notifyJobEvent(
       data: { job_id: job.id, event },
       sound: "default",
     }));
+    // No tokens means no request. Tokens are saved only after an Expo project id exists.
     if (messages.length === 0) return { sent: 0 };
     const res = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",

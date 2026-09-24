@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { formatUsd, type DriverProfile, type Job } from "@heft/shared";
+import { formatUsd, inPensacola, loadFailureCopy, serviceAreaHint, type DriverProfile, type Job } from "@heft/shared";
 import { JobMap } from "../../src/components/JobMap";
 import { BottomNav, Button, EmptyState, Screen } from "../../src/components/ui";
 import { track } from "../../src/lib/analytics";
@@ -55,7 +55,11 @@ export default function DriverMap() {
   }, [queryClient]);
 
   async function setOnline(online: boolean) {
-    if (!profile) return;
+    if (!profile || !driver.data) return;
+    if (online && !inPensacola(Number(driver.data.service_lat), Number(driver.data.service_lng))) {
+      toast(serviceAreaHint());
+      return;
+    }
     const { error } = await supabase.from("driver_profiles").update({ is_online: online }).eq("user_id", profile.id);
     if (error) {
       toast(error.message);
@@ -86,7 +90,9 @@ export default function DriverMap() {
 
   return (
     <Screen title="Open jobs" footer={<BottomNav items={NAV} />}>
-      {!driver.isLoading && !row ? (
+      {driver.isLoading ? <EmptyState title="Loading your vehicle" body="Checking approval and whether you are online." /> : null}
+      {driver.isError ? <EmptyState title={loadFailureCopy((driver.error as Error).message).title} body={loadFailureCopy((driver.error as Error).message).body} /> : null}
+      {!driver.isLoading && !driver.isError && !row ? (
         <>
           <EmptyState title="No vehicle on file" body="Add a truck and a Pensacola service circle. An admin has to approve you before jobs show up." />
           <Button label="Set up vehicle" onPress={() => router.push("/(driver)/setup")} />
@@ -108,10 +114,18 @@ export default function DriverMap() {
           onPress={() => void setOnline(!row.is_online)}
         />
       ) : null}
+      {row?.status === "approved" && row.is_online ? (
+        <Text className="mb-3 text-sm leading-5 text-steel">
+          You are online. On an active job, location updates about every 10 seconds. Faster pings are ignored.
+        </Text>
+      ) : null}
       {row?.status === "approved" && !row.is_online ? (
         <EmptyState title="You are offline" body="Go online to load open jobs inside your service circle. The list stays empty until then." />
       ) : null}
-      {row?.is_online && jobs.error ? <EmptyState title="Could not load jobs" body={(jobs.error as Error).message} /> : null}
+      {row?.is_online && jobs.isLoading ? <EmptyState title="Loading open jobs" body="Looking inside your service circle." /> : null}
+      {row?.is_online && jobs.error ? (
+        <EmptyState title={loadFailureCopy((jobs.error as Error).message).title} body={loadFailureCopy((jobs.error as Error).message).body} />
+      ) : null}
       {row?.is_online && jobs.isSuccess && openJobs.length === 0 ? (
         <EmptyState title="No open jobs in range" body="Stay online. New publishes inside your radius and vehicle class will land here." />
       ) : null}

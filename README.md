@@ -34,6 +34,8 @@ You can try Heft on your own computer with no accounts. A public release needs t
 6. **Supabase** — https://supabase.com/dashboard  
    Unlocks a cloud database so the phone and the website share real data when you are not on the same Wi‑Fi as your computer. The free project is enough to start.
 
+Recommended order when you leave your laptop: Expo and Supabase first (a cloud try, and push once `eas init` sets a project id), then Stripe test mode and Google Maps, then Apple and Google for the stores. Job alerts stay off until `EXPO_PUBLIC_EAS_PROJECT_ID` is set. Payout setup stays a message until a Stripe test secret exists.
+
 Draft Privacy Policy and Terms of Service are in the app under Account, and on the website at `/legal/privacy` and `/legal/terms`. They are marked **DRAFT** and are not legal advice. A lawyer should replace them before a store release.
 
 ## Local try
@@ -53,7 +55,15 @@ supabase start
 supabase status
 ```
 
-Copy the API URL and the anon key. Leave Google and Stripe blank.
+Copy the API URL and the anon key. Leave Google, Stripe, and the Expo project id blank.
+
+See the marketplace loop without creating accounts by hand:
+
+```bash
+npm run demo
+```
+
+That loads sample data only: a customer, an approved online driver, and one open Pensacola job named “Demo sofa”. It does not add payouts or revenue. Sign in on the phone as `driver@heft.local` / `heft-driver-seed` and tap Accept, or as `customer@heft.local` / `heft-customer-seed` to open that job. Admin stays `admin@heft.local` / `heft-admin-seed`.
 
 - Copy `apps/mobile/.env.example` to `apps/mobile/.env`
 - Copy `apps/admin/.env.example` to `apps/admin/.env.local`
