@@ -1,5 +1,6 @@
 import { haversineMiles, inPensacola, roundMiles } from "../geo";
-import { quoteCents, splitCents } from "../pricing";
+import { quoteLines, splitCents } from "../pricing";
+import { SIZE_LABEL, VEHICLE_LABEL } from "../status";
 import { canCancel, nextDriverStatus } from "../status";
 import type { JobStatus, Role, VehicleType } from "../types";
 import { createDemoState } from "./seed";
@@ -17,6 +18,8 @@ const TABLES = [
   "pricing_rules",
   "ratings",
   "device_tokens",
+  "driver_documents",
+  "feed_posts",
 ] as const;
 
 type TableName = (typeof TABLES)[number];
@@ -47,6 +50,7 @@ function rowsOf(state: DemoState, table: TableName): DemoRow[] {
 }
 
 function visible(table: TableName, rows: DemoRow[], actor: DemoRequest["actor"]): DemoRow[] {
+  if (table === "feed_posts" && actor?.role !== "admin") return rows.filter((row) => row.status === "approved");
   if (!actor || actor.role === "admin") return rows;
   if (table === "jobs" && actor.role === "customer") return rows.filter((row) => row.customer_id === actor.id);
   if (table === "jobs" && actor.role === "driver") {
@@ -153,6 +157,7 @@ function canMove(from: string, to: string, role: Role): boolean {
 
 export function applyDemo(input: DemoState, request: DemoRequest): { state: DemoState; result: DemoResult } {
   const state = clone(input);
+  if (!Array.isArray(state.feed_posts)) state.feed_posts = createDemoState().feed_posts;
   if (request.kind === "invoke") return applyInvoke(state, request);
   if (!isTable(request.table)) return fail(state, `Unknown table ${request.table}`);
   const table = request.table;
@@ -245,6 +250,45 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
   const jobId = String(body.job_id ?? "");
   const job = state.jobs.find((item) => item.id === jobId);
 
+  if (request.name === "assigned_driver_card") {
+    const cardJob = state.jobs.find((item) => item.id === String(body.job_id ?? ""));
+    if (!cardJob?.driver_id) return ok(state, null);
+    const person = state.users.find((item) => item.id === cardJob.driver_id);
+    const profile = state.driver_profiles.find((item) => item.user_id === cardJob.driver_id);
+    const docs = state.driver_documents.filter((item) => item.driver_id === cardJob.driver_id);
+    const licenseOk = docs.some((item) => item.kind === "license" && item.status === "approved");
+    const insuranceOk = docs.some((item) => item.kind === "insurance" && item.status === "approved");
+    return ok(state, {
+      display_name: person?.display_name ?? "Driver",
+      phone: person?.phone ?? null,
+      avatar_url: person?.avatar_url ?? null,
+      rating_avg: profile?.rating_avg ?? 0,
+      rating_count: profile?.rating_count ?? 0,
+      vehicle_color: profile?.vehicle_color ?? null,
+      vehicle_make: profile?.vehicle_make ?? null,
+      vehicle_model: profile?.vehicle_model ?? null,
+      vehicle_type: profile?.vehicle_type ?? null,
+      plate: profile?.plate ?? null,
+      status: profile?.status ?? "pending",
+      approved_documents: Boolean(licenseOk && insuranceOk && profile?.status === "approved"),
+    });
+  }
+  if (request.name === "delete-account") {
+    if (!actor) return fail(state, "Sign in first");
+    const busy = state.jobs.some(
+      (item) =>
+        (item.customer_id === actor.id || item.driver_id === actor.id) &&
+        ["assigned", "en_route_pickup", "at_pickup", "en_route_dropoff", "at_dropoff"].includes(String(item.status)),
+    );
+    if (busy) return fail(state, "Finish or cancel your active delivery first");
+    const person = state.users.find((item) => item.id === actor.id);
+    if (person) {
+      person.display_name = "Deleted user";
+      person.phone = null;
+      person.avatar_url = null;
+    }
+    return ok(state, { deleted: true });
+  }
   if (request.name === "notify") return ok(state, { sent: 0 });
   if (request.name === "connect-onboarding") {
     return ok(state, {
@@ -270,7 +314,8 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
       (item) => item.market === "pensacola" && item.vehicle_type === job.vehicle_required && item.size_category === job.size_category && item.active === true,
     );
     if (!rule) return fail(state, "No active pricing rule for this vehicle and size");
-    const estimate = quoteCents(
+    const stairs = Number(job.stairs_pickup_flights ?? 0) + Number(job.stairs_dropoff_flights ?? 0) > 0;
+    const breakdown = quoteLines(
       {
         vehicle_type: job.vehicle_required as VehicleType,
         base_cents: Number(rule.base_cents),
@@ -279,7 +324,14 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
         size_multiplier: Number(rule.size_multiplier),
       },
       miles,
+      {
+        stairs,
+        helper: job.needs_helper === true,
+        vehicleLabel: VEHICLE_LABEL[String(job.vehicle_required)] ?? "Pickup truck",
+        sizeLabel: SIZE_LABEL[String(job.size_category)] ?? "Medium",
+      },
     );
+    const estimate = breakdown.total_cents;
     const split = splitCents(estimate);
     Object.assign(job, {
       status: "priced",
@@ -288,6 +340,7 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
       final_cents: estimate,
       platform_fee_cents: split.platform_fee_cents,
       driver_payout_cents: split.driver_payout_cents,
+      quote_lines: breakdown.lines,
       updated_at: new Date().toISOString(),
     });
     state.job_events.push({
@@ -298,7 +351,16 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
       payload: { seed: "demo", distance_source: "haversine" },
       created_at: new Date().toISOString(),
     });
-    return ok(state, { ...split, estimate_cents: estimate, distance_miles: miles, distance_source: "haversine", sandbox: true, status: "priced" });
+    return ok(state, {
+      ...split,
+      estimate_cents: estimate,
+      total_cents: estimate,
+      lines: breakdown.lines,
+      distance_miles: miles,
+      distance_source: "haversine",
+      sandbox: true,
+      status: "priced",
+    });
   }
 
   if (request.name === "publish-job") {

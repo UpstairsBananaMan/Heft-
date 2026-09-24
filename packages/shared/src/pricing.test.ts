@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { eventLabel, loadFailureCopy } from "./copy";
 import { haversineMiles, inPensacola, roundMiles, serviceAreaHint, vehicleCovers } from "./geo";
-import { quoteCents, splitCents } from "./pricing";
+import { quoteCents, quoteLines, splitCents } from "./pricing";
 import { canCancel, canOpenDispute, cancelHint, disputeBlockedReason, nextDriverStatus } from "./status";
 import { isValidEmail, isValidPhone, publicSignupRole } from "./signup";
 import { toCsv } from "./csv";
@@ -36,6 +36,16 @@ describe("quote formula", () => {
     assert.equal(quoteCents(rule("box_truck", 8500, 400, 11000, 1.35), 5), 14850);
   });
 
+  it("itemizes stairs and helper without charging for placement", () => {
+    const rule = { vehicle_type: "pickup" as const, base_cents: 4500, per_mile_cents: 250, min_cents: 5500, size_multiplier: 1.15 };
+    const plain = quoteLines(rule, 10, { vehicleLabel: "Pickup truck", sizeLabel: "Medium" });
+    const withAddons = quoteLines(rule, 10, { stairs: true, helper: true, vehicleLabel: "Pickup truck", sizeLabel: "Medium" });
+    assert.equal(plain.lines.reduce((sum, line) => sum + line.cents, 0), plain.total_cents);
+    assert.equal(withAddons.total_cents, plain.total_cents + 1500 + 2000);
+    assert.equal(withAddons.lines.some((line) => line.key === "stairs"), true);
+    assert.equal(plain.lines.some((line) => line.key === "helper"), false);
+  });
+
   it("splits 15 percent to the platform in integer cents", () => {
     assert.deepEqual(splitCents(7000), {
       platform_fee_cents: 1050,
@@ -48,7 +58,8 @@ describe("quote formula", () => {
 describe("service area and distance", () => {
   it("names the Pensacola box when a point is outside", () => {
     assert.equal(inPensacola(30.4213, -87.2169), true);
-    assert.match(serviceAreaHint(), /30\.1–30\.7/);
+    assert.match(serviceAreaHint(), /Pensacola area/);
+    assert.doesNotMatch(serviceAreaHint(), /\d+\.\d+/);
   });
 
   it("accepts downtown Pensacola and rejects Mobile", () => {
@@ -82,13 +93,13 @@ describe("job transitions", () => {
     assert.equal(canCancel("open", "driver"), false);
     assert.equal(canCancel("assigned", "driver"), true);
     assert.equal(canCancel("en_route_dropoff", "driver"), false);
-    assert.match(cancelHint("open", "customer") ?? "", /No driver has accepted/);
-    assert.match(cancelHint("assigned", "customer") ?? "", /until they mark at pickup/);
+    assert.match(cancelHint("open", "customer") ?? "", /cancel for free/);
+    assert.match(cancelHint("assigned", "customer") ?? "", /arrives at pickup/);
     assert.equal(cancelHint("at_pickup", "customer"), null);
   });
 
   it("explains when a dispute cannot be opened", () => {
-    assert.match(disputeBlockedReason("open", null) ?? "", /after a driver accepts/);
+    assert.match(disputeBlockedReason("open", null) ?? "", /report a problem/);
     assert.equal(disputeBlockedReason("assigned", null), null);
     assert.match(disputeBlockedReason("cancelled", null) ?? "", /cannot be disputed/);
   });

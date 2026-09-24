@@ -23,7 +23,7 @@ export default async function DisputesPage({ searchParams }: { searchParams: Pro
     <main>
       <h1 className="text-3xl font-semibold">Disputes</h1>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-steel">
-        Resolving a dispute records notes only. Heft does not auto-refund. Reverse a capture in Stripe yourself if the
+        Resolving a dispute records notes only. This does not refund a payment. Reverse a capture in Stripe yourself if the
         notes say the customer should be refunded.
       </p>
       <Flash notice={notice} />

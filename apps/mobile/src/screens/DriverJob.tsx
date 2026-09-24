@@ -1,59 +1,33 @@
-import { useEffect, useState } from "react";
-import { AppState, Linking, Platform, Text, View } from "react-native";
-import * as ImagePicker from "expo-image-picker";
-import * as Location from "expo-location";
+import { useState } from "react";
+import { Linking, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { ArrowLeft, Check, Clock, MessageCircle, Phone } from "lucide-react-native";
 import {
-  STATUS_LABEL,
+  DRIVER_ACTION,
   formatUsd,
-  isActiveDelivery,
-  loadFailureCopy,
+  haversineMiles,
+  neighbourhood,
   nextDriverStatus,
   type Job,
-  type JobEvent,
   type JobStatus,
 } from "@heft/shared";
-import { CancelBox, DisputeBox } from "../components/JobActions";
-import { Button, EmptyState, ErrorText, Notice, Screen, StatusPill } from "../components/ui";
-import { track } from "../lib/analytics";
-import { demoMode } from "../lib/supabase";
+import { JobMap } from "../components/JobMap";
+import { Confetti, CountUp, SkipLayer, useDelight } from "../components/delight";
+import { Illustration } from "../components/Illustration";
+import { C, font, HoldToAccept, OutlineButton, PrimaryButton } from "../components/v2";
+import { demoMode, supabase } from "../lib/supabase";
 import { errorText, invoke } from "../lib/invoke";
-import { uploadJobImage } from "../lib/photos";
-import { supabase } from "../lib/supabase";
+import { haptic } from "../lib/haptics";
 import { useSession } from "../store/session";
-import { toast } from "../store/toast";
 
-const RAIL: { key: JobStatus; label: string }[] = [
-  { key: "assigned", label: "Assigned" },
-  { key: "en_route_pickup", label: "To pickup" },
-  { key: "at_pickup", label: "At pickup" },
-  { key: "en_route_dropoff", label: "To drop-off" },
-  { key: "at_dropoff", label: "At drop-off" },
-  { key: "delivered", label: "Delivered" },
-  { key: "paid", label: "Paid" },
-];
-
-function StatusRail({ status }: { status: JobStatus }) {
-  const index = RAIL.findIndex((step) => step.key === status);
-  if (index < 0) return null;
-  return (
-    <View className="mb-4 flex-row flex-wrap">
-      {RAIL.map((step, stepIndex) => {
-        const reached = stepIndex <= index;
-        const current = stepIndex === index;
-        return (
-          <View key={step.key} className="mb-2 mr-3">
-            <Text className={`text-[11px] font-semibold uppercase tracking-wider ${reached ? "text-charcoal" : "text-steel"}`}>
-              {step.label}
-            </Text>
-            <View className={`mt-1 h-1 w-12 ${current ? "bg-amber" : reached ? "bg-charcoal" : "bg-line"}`} />
-          </View>
-        );
-      })}
-    </View>
-  );
-}
+const STEP_COPY: Partial<Record<JobStatus, { n: number; headline: string }>> = {
+  assigned: { n: 1, headline: "Head to pickup" },
+  en_route_pickup: { n: 2, headline: "Drive to pickup" },
+  at_pickup: { n: 3, headline: "Load the item" },
+  en_route_dropoff: { n: 4, headline: "Drive to drop-off" },
+  at_dropoff: { n: 5, headline: "Deliver and take a photo" },
+};
 
 export default function DriverJob() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -62,9 +36,8 @@ export default function DriverJob() {
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  const [paidAt, setPaidAt] = useState<string | null>(null);
-  const [podCount, setPodCount] = useState(0);
-
+  const [photo, setPhoto] = useState(false);
+  const [donePay, setDonePay] = useState<number | null>(null);
   const job = useQuery({
     queryKey: ["job", id],
     queryFn: async () => {
@@ -73,271 +46,251 @@ export default function DriverJob() {
       return data as Job | null;
     },
   });
-
-  async function refreshPod() {
-    const { count } = await supabase
-      .from("job_photos")
-      .select("id", { count: "exact", head: true })
-      .eq("job_id", id)
-      .eq("kind", "pod");
-    setPodCount(count ?? 0);
-  }
-
-  useEffect(() => {
-    void refreshPod();
-  }, [id, job.data?.status]);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel(`driver-job-${id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "jobs", filter: `id=eq.${id}` }, () => {
-        void queryClient.invalidateQueries({ queryKey: ["job", id] });
-      })
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [id, queryClient]);
-
-  useEffect(() => {
-    const row = job.data;
-    if (Platform.OS === "web" || !row || !profile || row.driver_id !== profile.id || !isActiveDelivery(row.status)) return;
-    let timer: ReturnType<typeof setInterval> | undefined;
-    async function ping() {
-      if (AppState.currentState !== "active") return;
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== "granted" || !profile) return;
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      await supabase
-        .from("driver_profiles")
-        .update({
-          current_lat: position.coords.latitude,
-          current_lng: position.coords.longitude,
-          last_seen_at: new Date().toISOString(),
-        })
-        .eq("user_id", profile.id);
-    }
-    void ping();
-    timer = setInterval(() => void ping(), 9000);
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [job.data?.status, job.data?.driver_id, profile]);
-
-  useEffect(() => {
-    if (job.data?.status !== "paid") return;
-    void supabase
-      .from("job_events")
-      .select("created_at")
-      .eq("job_id", id)
-      .eq("type", "paid")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => setPaidAt((data as Pick<JobEvent, "created_at"> | null)?.created_at ?? null));
-  }, [id, job.data?.status]);
-
   const row = job.data;
-  const next = row ? nextDriverStatus(row.status) : null;
-
-  function fail(err: unknown) {
-    const message = errorText(err);
-    setError(message);
-    toast(message);
+  if (!row) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.paper, justifyContent: "center", alignItems: "center" }}>
+        <Text style={{ fontFamily: font.body, fontSize: 16 }}>{job.isLoading ? " " : "Job not found"}</Text>
+      </View>
+    );
   }
 
-  async function accept() {
-    setPending(true);
+  async function accept(jobId: string) {
     setError("");
     try {
-      await invoke("accept-job", { job_id: id });
+      await invoke("accept-job", { job_id: jobId });
+      haptic.success();
       await queryClient.invalidateQueries({ queryKey: ["job", id] });
-      await queryClient.invalidateQueries({ queryKey: ["open-jobs"] });
-      track({ name: "job_accepted" });
-      toast("Job accepted. Head to pickup.", "ok");
     } catch (err) {
-      fail(err);
-    } finally {
-      setPending(false);
+      setError(errorText(err).includes("taken") ? "Another driver took this job." : errorText(err));
     }
   }
 
-  async function advance(status: JobStatus) {
-    setPending(true);
-    setError("");
-    try {
-      await invoke("update-job-status", { job_id: id, status });
-      await job.refetch();
-      toast(`Marked ${STATUS_LABEL[status]}.`, "ok");
-    } catch (err) {
-      fail(err);
-    } finally {
-      setPending(false);
-    }
+  if (row.status === "open") {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.paper, padding: 20, paddingTop: 64 }}>
+        <Pressable onPress={() => router.back()} style={{ minHeight: 44, justifyContent: "center" }}>
+          <ArrowLeft color={C.ink} size={22} />
+        </Pressable>
+        <Text style={{ fontFamily: font.display, fontSize: 40 }}>{formatUsd(row.driver_payout_cents)}</Text>
+        <Text style={{ fontFamily: font.body, fontSize: 16, marginVertical: 8 }}>
+          {row.item_description} · {neighbourhood(row.pickup_address)} to {neighbourhood(row.dropoff_address)}
+        </Text>
+        <HoldToAccept onAccept={() => accept(row.id)} />
+        {error ? <Text style={{ color: C.red, marginTop: 8 }}>{error}</Text> : null}
+      </View>
+    );
   }
 
-  async function addPod(source: "camera" | "library") {
-    setError("");
-    if (!row) return;
-    const permission =
-      source === "camera"
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      const message =
-        source === "camera"
-          ? "Camera permission is required to photograph the delivery."
-          : "Photo library permission is required for proof of delivery.";
-      setError(message);
-      toast(message);
+  const step = STEP_COPY[row.status];
+  const goingToPickup = ["assigned", "en_route_pickup", "at_pickup"].includes(row.status);
+  const address = goingToPickup ? row.pickup_address : row.dropoff_address;
+  const miles = Number(row.distance_miles ?? 0);
+  const minutes = Math.max(1, Math.round((miles / 22) * 60));
+  const stairs = row.stairs_pickup_flights > 0 ? `${row.stairs_pickup_flights} flight at pickup` : "No stairs";
+  const helper = row.needs_helper ? "Needs a second person" : "Customer will help";
+  const next = nextDriverStatus(row.status);
+  const action = next === "delivered" ? "Finish delivery" : next ? DRIVER_ACTION[next] ?? "Continue" : "Back to jobs";
+  const needsPhoto = row.status === "at_dropoff" && !photo;
+  const current = row;
+
+  async function advance() {
+    if (!next) {
+      router.replace("/(driver)/map");
       return;
     }
-    const result =
-      source === "camera"
-        ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.7 })
-        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
-    if (result.canceled || !result.assets[0]) return;
-    try {
-      await uploadJobImage("pod", row.id, result.assets[0].uri);
-      track({ name: "pod_uploaded" });
-      await refreshPod();
-      toast("Proof photo saved.", "ok");
-    } catch (err) {
-      fail(err);
-    }
-  }
-
-  async function complete() {
+    if (needsPhoto) return;
     setPending(true);
     setError("");
     try {
-      await invoke("complete-job", { job_id: id });
-      await job.refetch();
-      await queryClient.invalidateQueries({ queryKey: ["earnings"] });
-      toast("Payout recorded. Check Earnings.", "ok");
+      haptic.medium();
+      if (next === "delivered") {
+        if (demoMode) {
+          await supabase.from("job_photos").insert({ job_id: current.id, storage_path: `${current.id}/pod.jpg`, kind: "pod" });
+        }
+        await invoke("update-job-status", { job_id: current.id, status: "delivered" });
+        await invoke("complete-job", { job_id: current.id });
+        haptic.success();
+        setDonePay(current.driver_payout_cents);
+      } else {
+        await invoke("update-job-status", { job_id: current.id, status: next });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["job", id] });
     } catch (err) {
-      fail(err);
+      haptic.error();
+      setError("Didn't save. Check your connection and tap again.");
     } finally {
       setPending(false);
     }
   }
 
-  function navigate(lat: number, lng: number) {
+  function openMaps() {
+    const lat = goingToPickup ? row!.pickup_lat : row!.dropoff_lat;
+    const lng = goingToPickup ? row!.pickup_lng : row!.dropoff_lng;
     const url = Platform.select({
       ios: `http://maps.apple.com/?daddr=${lat},${lng}`,
-      android: `geo:${lat},${lng}?q=${lat},${lng}`,
+      android: `geo:${lat},${lng}`,
       default: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
     });
     if (url) void Linking.openURL(url);
   }
 
+  if (donePay != null) {
+    return <PayoutMoment cents={donePay} jobId={current.id} item={current.item_description} route={`${neighbourhood(current.pickup_address)} → ${neighbourhood(current.dropoff_address)}`} miles={Number(current.distance_miles ?? 0)} onDone={() => router.replace("/(driver)/map")} />;
+  }
+
+  const pins = [
+    { id: "stop", lat: goingToPickup ? row.pickup_lat : row.dropoff_lat, lng: goingToPickup ? row.pickup_lng : row.dropoff_lng, title: goingToPickup ? "Pickup" : "Drop-off", kind: (goingToPickup ? "pickup" : "dropoff") as "pickup" | "dropoff" },
+    { id: "driver", lat: 30.4213, lng: -87.2169, title: "", kind: "driver" as const },
+  ];
+
   return (
-    <Screen title="Job" back>
-      {job.isLoading ? <EmptyState title="Loading job" body="Fetching the latest status." /> : null}
-      {job.isError ? (
-        <EmptyState title={loadFailureCopy((job.error as Error).message).title} body={loadFailureCopy((job.error as Error).message).body} />
-      ) : null}
-      {!job.isLoading && !job.isError && !row ? (
-        <EmptyState
-          title="Job not visible"
-          body="Go online inside your service area with an approved vehicle, or this job was already taken."
-        />
-      ) : null}
-      {row ? (
-        <>
-          <StatusPill status={row.status} />
-          <View className="mt-3">
-            <StatusRail status={row.status} />
+    <View style={{ flex: 1, backgroundColor: C.paper }}>
+      <View style={{ height: 260 }}>
+        <JobMap pins={pins} height={260} />
+        <View style={{ position: "absolute", top: 52, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between" }}>
+          <Pressable accessibilityLabel="Back" onPress={() => router.back()} style={round}>
+            <ArrowLeft color={C.ink} size={18} />
+          </Pressable>
+          <View style={{ backgroundColor: C.white, borderRadius: 999, paddingHorizontal: 14, minHeight: 40, justifyContent: "center" }}>
+            <Text style={{ fontFamily: font.semi }}>Payout {formatUsd(row.driver_payout_cents)}</Text>
           </View>
-          <Text className="text-xl font-semibold text-charcoal">{row.item_description}</Text>
-          <Text className="mt-2 text-sm leading-5 text-steel">
-            {row.pickup_address}
-            {"\n"}→ {row.dropoff_address}
+        </View>
+      </View>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 28 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <Text style={{ color: C.amberInk, fontFamily: font.semi, fontSize: 14 }}>
+            Step {step?.n ?? 1} of 5 · {step?.headline ?? "Job"}
           </Text>
-          <Text className="mt-3 font-mono text-lg">{formatUsd(row.driver_payout_cents)} payout</Text>
-          {row.driver_id === profile?.id && isActiveDelivery(row.status) ? (
-            <Text className="mt-2 text-sm leading-5 text-steel">
-              Location updates about every 10 seconds while this delivery is active and the app is open. Faster updates are ignored.
-            </Text>
-          ) : null}
-          {row.stripe_payment_intent_id?.startsWith("pi_sandbox_") ? (
-            <Notice>Sandbox hold. Completing the job records a pending payout. No card is charged.</Notice>
-          ) : null}
-          {error ? <ErrorText>{error}</ErrorText> : null}
-          {row.status === "open" ? <Button label={pending ? "Accepting" : "Accept job"} disabled={pending} onPress={() => void accept()} /> : null}
-          {row.driver_id === profile?.id && row.status !== "open" ? (
-            <>
-              {["assigned", "en_route_pickup", "at_pickup"].includes(row.status) ? (
-                <Button label="Navigate to pickup" tone="charcoal" onPress={() => navigate(row.pickup_lat, row.pickup_lng)} />
-              ) : null}
-              {["en_route_dropoff", "at_dropoff"].includes(row.status) ? (
-                <Button label="Navigate to drop-off" tone="charcoal" onPress={() => navigate(row.dropoff_lat, row.dropoff_lng)} />
-              ) : null}
-              {next && next !== "delivered" ? (
-                <Button label={pending ? "Updating" : `Mark ${STATUS_LABEL[next]}`} disabled={pending} onPress={() => void advance(next)} />
-              ) : null}
-              {row.status === "at_dropoff" || row.status === "delivered" ? (
-                <>
-                  <Text className="mb-2 mt-2 text-sm font-semibold text-charcoal">Proof of delivery</Text>
-                  {podCount < 1 ? (
-                    <Notice>Add a photo of the load at the drop-off. Mark delivered stays locked until one photo is saved.</Notice>
-                  ) : (
-                    <Text className="mb-3 text-sm text-steel">
-                      {podCount} photo{podCount === 1 ? "" : "s"} attached.
-                    </Text>
-                  )}
-                  {demoMode ? (
-                    <Button
-                      label="Use sample delivery photo"
-                      onPress={() => {
-                        void (async () => {
-                          const { error: insertError } = await supabase.from("job_photos").insert({
-                            job_id: row.id,
-                            storage_path: `${row.id}/demo-pod.svg`,
-                            kind: "pod",
-                          });
-                          if (insertError) {
-                            fail(new Error(insertError.message));
-                            return;
-                          }
-                          track({ name: "pod_uploaded" });
-                          await refreshPod();
-                          toast("Sample proof photo saved.", "ok");
-                        })();
-                      }}
-                    />
-                  ) : null}
-                  <Button label="Take photo" onPress={() => void addPod("camera")} />
-                  <Button label="Choose from library" tone="ghost" onPress={() => void addPod("library")} />
-                </>
-              ) : null}
-              {next === "delivered" ? (
-                <Button
-                  label={podCount < 1 ? "Photo required to mark delivered" : pending ? "Updating" : "Mark delivered"}
-                  disabled={pending || podCount < 1}
-                  onPress={() => void advance("delivered")}
-                />
-              ) : null}
-              {row.status === "delivered" ? (
-                <Button
-                  label={podCount < 1 ? "Photo required to complete" : pending ? "Completing" : "Complete and record payout"}
-                  disabled={pending || podCount < 1}
-                  onPress={() => void complete()}
-                />
-              ) : null}
-              {row.status === "paid" ? (
-                <Button label="Rate customer" onPress={() => router.push(`/rate/${row.id}`)} />
-              ) : null}
-            </>
-          ) : null}
-          {profile ? (
-            <>
-              <CancelBox job={row} role="driver" onDone={() => void job.refetch()} />
-              <DisputeBox job={row} userId={profile.id} paidAt={paidAt} onDone={() => void job.refetch()} />
-            </>
-          ) : null}
-        </>
-      ) : null}
-    </Screen>
+          <Text style={{ textDecorationLine: "underline", fontFamily: font.semi }}>Help</Text>
+        </View>
+        <Text style={{ fontFamily: font.heading, fontSize: 26, marginTop: 8 }}>{address.split(",")[0]}</Text>
+        <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 16 }}>
+          {neighbourhood(address)} · {miles.toFixed(1)} mi · about {minutes} min
+        </Text>
+        <View style={{ marginTop: 12, backgroundColor: C.amber50, borderRadius: 14, padding: 12 }}>
+          <Text style={{ fontFamily: font.body, fontSize: 15 }}>
+            {row.item_description} · {stairs} · {helper}
+            {row.pickup_notes ? `. ${row.pickup_notes}.` : ""}
+          </Text>
+        </View>
+        <View style={{ marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.sand150, alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ fontFamily: font.semi }}>D</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: font.semi, fontSize: 16 }}>Dana R.</Text>
+            <Text style={{ color: C.steel, fontSize: 14, fontFamily: font.body }}>Customer</Text>
+          </View>
+          <Pressable accessibilityLabel="Text Dana" onPress={() => void Linking.openURL("sms:+18505550101")} style={round}>
+            <MessageCircle color={C.ink} size={18} />
+          </Pressable>
+          <Pressable accessibilityLabel="Call Dana" onPress={() => void Linking.openURL("tel:+18505550101")} style={round}>
+            <Phone color={C.ink} size={18} />
+          </Pressable>
+        </View>
+        <Text style={{ marginTop: 8, color: C.steel, fontFamily: font.body, fontSize: 13 }}>Sharing your location with the customer during this job</Text>
+        {row.status === "at_dropoff" ? (
+          <View style={{ marginTop: 12 }}>
+            <Text style={{ fontFamily: font.body, fontSize: 15, marginBottom: 8 }}>Take a photo of the item where you left it. The customer sees this photo.</Text>
+            {demoMode ? (
+              <Pressable onPress={() => setPhoto(true)} style={{ minHeight: 44, justifyContent: "center" }}>
+                <Text style={{ textDecorationLine: "underline", fontFamily: font.semi }}>Demo: use a sample photo</Text>
+              </Pressable>
+            ) : null}
+            <OutlineButton label={photo ? "Photo added" : "Choose from library"} onPress={() => setPhoto(true)} />
+          </View>
+        ) : null}
+        {error ? <Text style={{ color: C.red, marginTop: 8, fontFamily: font.body }}>{error}</Text> : null}
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 16 }}>
+          <View style={{ flex: 1 }}>
+            <OutlineButton label="Open in Maps" onPress={openMaps} />
+          </View>
+          <View style={{ flex: 1.4 }}>
+            <PrimaryButton
+              label={pending ? "Finishing…" : needsPhoto ? "Add a photo to finish" : action}
+              disabled={pending || needsPhoto || !profile}
+              onPress={() => void advance()}
+            />
+          </View>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
+
+function PayoutMoment({
+  cents,
+  jobId,
+  item,
+  route,
+  miles,
+  onDone,
+}: {
+  cents: number;
+  jobId: string;
+  item: string;
+  route: string;
+  miles: number;
+  onDone: () => void;
+}) {
+  const payouts = useQuery({
+    queryKey: ["payout-status", jobId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("payouts").select("amount_cents,status,job_id");
+      if (error) throw error;
+      return (data ?? []) as { amount_cents: number; status: string; job_id: string }[];
+    },
+  });
+  const mine = (payouts.data ?? []).find((row) => row.job_id === jobId);
+  const landed = mine?.status === "paid";
+  const today = (payouts.data ?? []).reduce((sum, row) => sum + (row.amount_cents ?? 0), 0) || cents;
+  const delight = useDelight({
+    jobId,
+    moment: "payout",
+    announce: landed ? `${formatUsd(cents)} paid` : `${formatUsd(cents)} on its way to your account`,
+    enabled: true,
+  });
+  const [stars, setStars] = useState(false);
+  return (
+    <View style={{ flex: 1, backgroundColor: C.ink }}>
+      <Confetti count={20} play={delight.playing && !delight.reduced} />
+      <View style={{ flex: 1, alignItems: "center", paddingTop: 88, zIndex: 2 }}>
+        <View style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: C.amber50, alignItems: "center", justifyContent: "center" }}>
+          <Illustration name="box-happy" width={84} height={84} />
+        </View>
+        <Text style={{ marginTop: 16, color: "#C8C2B8", fontFamily: font.medium, fontSize: 14 }}>Delivery complete</Text>
+        <CountUp cents={cents} play={delight.playing && !delight.reduced} prefix="+" color={C.paper} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 }}>
+          {landed ? <Check color="#F2C45A" size={16} /> : <Clock color="#F2C45A" size={16} />}
+          <Text style={{ color: "#F2C45A", fontFamily: font.semi, fontSize: 16 }}>{landed ? "Paid" : "On its way to your account"}</Text>
+        </View>
+        <View style={{ marginTop: 12, backgroundColor: "#24282D", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, flexDirection: "row", alignItems: "center" }}>
+          <Text style={{ color: C.paper, fontFamily: font.semi, fontSize: 14 }}>Today </Text>
+          <CountUp cents={today} play={delight.playing && !delight.reduced} color={C.paper} size={16} hapticOnEnd={false} />
+        </View>
+        <View style={{ marginTop: 28, alignSelf: "stretch", marginHorizontal: 20, backgroundColor: "#24282D", borderRadius: 16, padding: 14 }}>
+          <Text style={{ color: C.paper, fontFamily: font.semi, fontSize: 16 }}>{item}</Text>
+          <Text style={{ color: "#C8C2B8", fontFamily: font.body, fontSize: 14 }}>{route} · {miles.toFixed(1)} mi</Text>
+          <Text style={{ marginTop: 8, color: "#C8C2B8", fontFamily: font.body, fontSize: 14 }}>Delivery photo saved</Text>
+        </View>
+      </View>
+      <View pointerEvents={delight.locked ? "none" : "auto"} style={{ padding: 20, zIndex: 3 }}>
+        <PrimaryButton label="Back to jobs" onPress={onDone} />
+        <Pressable onPress={() => setStars(true)} style={{ minHeight: 48, marginTop: 8, borderRadius: 16, borderWidth: 1.5, borderColor: "#3A3424", alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: C.paper, fontFamily: font.semi, fontSize: 16 }}>{stars ? "Thanks" : "Rate the customer"}</Text>
+        </Pressable>
+      </View>
+      <SkipLayer active={delight.playing} onSkip={delight.skip} onDark />
+    </View>
+  );
+}
+
+const round = {
+  width: 44,
+  height: 44,
+  borderRadius: 22,
+  backgroundColor: C.white,
+  alignItems: "center" as const,
+  justifyContent: "center" as const,
+};

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { STATUS_LABEL, eventLabel, formatUsd, type JobStatus } from "@heft/shared";
 import { Flash } from "@/components/flash";
-import { resolveDispute, restoreDisputedJob } from "@/lib/actions";
+import { resolveDispute, restoreDisputedJob, reviewFeedPost } from "@/lib/actions";
 import { requireAdmin } from "@/lib/auth";
 
 export default async function JobDetailPage({
@@ -41,6 +41,7 @@ export default async function JobDetailPage({
       return { ...photo, url: data?.signedUrl ?? null };
     }),
   );
+  const { data: feedPosts } = await gate.supabase.from("feed_posts").select("*").eq("job_id", id);
   const customer = Array.isArray(job.customer) ? job.customer[0] : job.customer;
   const driver = Array.isArray(job.driver) ? job.driver[0] : job.driver;
 
@@ -84,6 +85,33 @@ export default async function JobDetailPage({
           <dd className="mt-1 font-mono text-sm">{job.stripe_payment_intent_id ?? "—"}</dd>
         </div>
       </dl>
+      {(feedPosts ?? []).map((post) => (
+        <section key={post.id} className="mt-4 border border-line bg-white p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-steel">Moves around town · {post.status}</p>
+          <p className="mt-2 text-sm">
+            {post.item_label} · {post.pickup_area} → {post.dropoff_area} · {post.month_label}
+          </p>
+          {post.is_demo ? <p className="mt-1 text-sm text-steel">Demo sample</p> : null}
+          <div className="mt-3 flex gap-2">
+            <form action={reviewFeedPost}>
+              <input type="hidden" name="id" value={post.id} />
+              <input type="hidden" name="job_id" value={job.id} />
+              <input type="hidden" name="status" value="approved" />
+              <button type="submit" className="rounded-md bg-ink-900 px-3 py-2 text-sm text-paper">
+                Approve for feed
+              </button>
+            </form>
+            <form action={reviewFeedPost}>
+              <input type="hidden" name="id" value={post.id} />
+              <input type="hidden" name="job_id" value={job.id} />
+              <input type="hidden" name="status" value="rejected" />
+              <button type="submit" className="rounded-md border border-line px-3 py-2 text-sm">
+                Reject
+              </button>
+            </form>
+          </div>
+        </section>
+      ))}
       {(disputes ?? []).map((dispute) => (
         <section key={dispute.id} className="mt-4 border border-line bg-white p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-steel">Dispute · {dispute.status}</p>

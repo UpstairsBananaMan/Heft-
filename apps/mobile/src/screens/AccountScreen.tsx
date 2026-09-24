@@ -1,117 +1,127 @@
-import { ReactNode, useState } from "react";
-import { Linking, Text } from "react-native";
+import { useEffect, useState } from "react";
+import { Alert, Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { isValidPhone } from "@heft/shared";
-import { Button, ErrorText, Field, Notice, Screen } from "../components/ui";
+import { Trash2 } from "lucide-react-native";
+import { APP_NAME, driverKeepPercent } from "@heft/shared";
+import { C, font, OutlineButton } from "../components/v2";
+import { demoMode, supabase } from "../lib/supabase";
+import { demoPerson, setDemoRole } from "../lib/demo-client";
 import { errorText, invoke } from "../lib/invoke";
-import { registerForJobAlerts } from "../lib/push";
-import { supabase } from "../lib/supabase";
 import { useSession } from "../store/session";
+import type { Session } from "@supabase/supabase-js";
 
-export function AccountScreen({
-  homeHref,
-  footer,
-}: {
-  homeHref: "/(customer)/home" | "/(driver)/map";
-  footer?: ReactNode;
-}) {
+export function AccountScreen() {
   const router = useRouter();
   const profile = useSession((state) => state.profile);
-  const refreshProfile = useSession((state) => state.refreshProfile);
   const signOut = useSession((state) => state.signOut);
-  const [name, setName] = useState(profile?.display_name ?? "");
-  const [phone, setPhone] = useState(profile?.phone ?? "");
-  const [message, setMessage] = useState("");
+  const refreshProfile = useSession((state) => state.refreshProfile);
   const [error, setError] = useState("");
+  const [showName, setShowName] = useState(false);
+  useEffect(() => {
+    if (profile?.role !== "driver" || !profile.id) return;
+    void supabase
+      .from("driver_profiles")
+      .select("show_name_in_feed")
+      .eq("user_id", profile.id)
+      .maybeSingle()
+      .then(({ data }) => setShowName(Boolean((data as { show_name_in_feed?: boolean } | null)?.show_name_in_feed)));
+  }, [profile?.id, profile?.role]);
+  const first = profile?.display_name?.slice(0, 1) ?? "?";
 
-  async function save() {
-    if (!profile) return;
-    if (name.trim().length < 2) {
-      setError("Display name needs at least 2 characters.");
-      return;
-    }
-    if (phone.trim() && !isValidPhone(phone)) {
-      setError("Phone needs at least 10 digits, or leave it blank.");
-      return;
-    }
+  async function remove() {
     setError("");
-    const { error: updateError } = await supabase
-      .from("users")
-      .update({ display_name: name.trim(), phone: phone.trim() || null })
-      .eq("id", profile.id);
-    if (updateError) {
-      setError(updateError.message);
-      return;
-    }
-    await refreshProfile();
-    setMessage("Saved.");
-  }
-
-  async function enablePush() {
-    setError("");
-    setMessage("");
-    if (!profile) return;
-    const result = await registerForJobAlerts(profile.id);
-    if (!result.ok) {
-      setMessage(result.message);
-      return;
-    }
-    setMessage("This phone will get job alerts when a status changes.");
-  }
-
-  async function setupPayouts() {
-    setError("");
-    setMessage("");
     try {
-      const result = await invoke<{ sandbox?: boolean; url?: string | null; message?: string }>("connect-onboarding", {});
-      if (result.message) setMessage(result.message);
-      if (result.url) await Linking.openURL(result.url);
+      await invoke("delete-account", {});
+      await signOut();
+      router.replace("/(auth)/welcome");
     } catch (err) {
       setError(errorText(err));
     }
   }
 
+  function confirmDelete() {
+    Alert.alert("Delete account permanently?", "This can't be undone.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: () => void remove() },
+    ]);
+  }
+
+  async function switchRole(role: "customer" | "driver") {
+    const person = demoPerson(role);
+    setDemoRole(role);
+    useSession.setState({ session: { user: { id: person.id, email: person.email } } as Session, profile: null });
+    await refreshProfile();
+    router.replace("/");
+  }
+
   return (
-    <Screen title="Account" footer={footer}>
-      <Text className="mb-4 text-xs font-semibold uppercase tracking-wider text-steel">{profile?.role}</Text>
-      <Field label="Display name" value={name} onChangeText={setName} />
-      <Field label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-      {error ? <ErrorText>{error}</ErrorText> : null}
-      {message ? <Notice>{message}</Notice> : null}
-      <Button label="Save profile" onPress={save} />
-      <ViewGap />
-      <Button label="Enable job alerts" tone="charcoal" onPress={() => void enablePush()} />
-      <Text className="mb-3 text-xs leading-5 text-steel">
-        Alerts stay off until an Expo project id is configured. Without it, this button explains why and does not crash.
-      </Text>
+    <ScrollView style={{ flex: 1, backgroundColor: C.paper }} contentContainerStyle={{ padding: 20, paddingTop: 64, paddingBottom: 40 }}>
+      <Text style={{ fontFamily: font.heading, fontSize: 28, marginBottom: 16 }}>Profile</Text>
+      <View style={{ backgroundColor: C.white, borderRadius: 18, padding: 16, flexDirection: "row", gap: 12, alignItems: "center" }}>
+        <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: C.sand150, alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ fontFamily: font.semi, fontSize: 18 }}>{first}</Text>
+        </View>
+        <View>
+          <Text style={{ fontFamily: font.semi, fontSize: 17 }}>{profile?.display_name}</Text>
+          <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 14 }}>{profile?.phone || "Add a phone number"}</Text>
+        </View>
+      </View>
+      <View style={{ marginTop: 16, backgroundColor: C.white, borderRadius: 18 }}>
+        <Row label="Help" onPress={() => router.push("/legal/terms")} />
+        <Row label="Privacy Policy" onPress={() => router.push("/legal/privacy")} />
+        <Row label="Terms of Service" onPress={() => router.push("/legal/terms")} />
+      </View>
       {profile?.role === "driver" ? (
-        <Button label="Set up payouts" tone="charcoal" onPress={() => void setupPayouts()} />
+        <View style={{ marginTop: 16, backgroundColor: C.white, borderRadius: 18, padding: 16, flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: font.semi, fontSize: 16 }}>Show my first name on Moves around town</Text>
+            <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 14, marginTop: 4 }}>Off until you turn it on.</Text>
+          </View>
+          <Switch
+            accessibilityLabel="Show my first name on Moves around town"
+            value={showName}
+            onValueChange={(value) => {
+              setShowName(value);
+              if (profile.id) void supabase.from("driver_profiles").update({ show_name_in_feed: value }).eq("user_id", profile.id);
+            }}
+          />
+        </View>
       ) : null}
-      {profile?.role === "driver" ? (
-        <>
-          <ViewGap />
-          <Button label="Vehicle profile" tone="ghost" onPress={() => router.push("/(driver)/setup")} />
-        </>
+      {profile?.role === "customer" ? (
+        <Text style={{ marginTop: 16, color: C.steel, fontFamily: font.body, fontSize: 15 }}>
+          Want to earn with your truck? Drive with {APP_NAME}. Driving uses a separate account for now.
+        </Text>
+      ) : (
+        <Text style={{ marginTop: 16, color: C.steel, fontFamily: font.body, fontSize: 15 }}>
+          Need something moved? Book with a customer account. Keep {driverKeepPercent()}% of every fare.
+        </Text>
+      )}
+      {demoMode ? (
+        <View style={{ marginTop: 16, backgroundColor: C.white, borderRadius: 18, padding: 16 }}>
+          <Text style={{ fontFamily: font.semi, fontSize: 16, marginBottom: 8 }}>Demo</Text>
+          <OutlineButton label="Customer demo" onPress={() => void switchRole("customer")} />
+          <View style={{ height: 8 }} />
+          <OutlineButton label="Driver demo" onPress={() => void switchRole("driver")} />
+        </View>
       ) : null}
-      <ViewGap />
-      <Button label="Privacy Policy (draft)" tone="ghost" onPress={() => router.push("/legal/privacy")} />
-      <Button label="Terms of Service (draft)" tone="ghost" onPress={() => router.push("/legal/terms")} />
-      <Text className="mb-4 text-xs leading-5 text-steel">
-        Those pages are drafts, not legal advice. The same text is on the admin site at /legal/privacy and /legal/terms.
-      </Text>
-      <Button
-        label="Sign out"
-        tone="ghost"
-        onPress={async () => {
-          await signOut();
-          router.replace("/(auth)/welcome");
-        }}
-      />
-      <Text className="mt-6 text-xs leading-5 text-steel">Home route {homeHref} stays on this role. Dual-role accounts are out of scope.</Text>
-    </Screen>
+      <View style={{ marginTop: 24 }}>
+        <Pressable onPress={() => void signOut().then(() => router.replace("/(auth)/welcome"))} style={{ minHeight: 48, justifyContent: "center" }}>
+          <Text style={{ fontFamily: font.semi, fontSize: 16 }}>Sign out</Text>
+        </Pressable>
+        <Pressable onPress={confirmDelete} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Trash2 color={C.red} size={18} />
+          <Text style={{ color: C.red, fontFamily: font.semi, fontSize: 16 }}>Delete account</Text>
+        </Pressable>
+        {error ? <Text style={{ color: C.red, fontFamily: font.body, fontSize: 14 }}>{error}</Text> : null}
+      </View>
+    </ScrollView>
   );
 }
 
-function ViewGap() {
-  return <Text className="h-3"> </Text>;
+function Row({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={{ minHeight: 52, justifyContent: "center", paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: C.sand200 }}>
+      <Text style={{ fontFamily: font.medium, fontSize: 16 }}>{label}</Text>
+    </Pressable>
+  );
 }

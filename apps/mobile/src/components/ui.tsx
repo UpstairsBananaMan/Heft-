@@ -2,9 +2,7 @@ import { ReactNode } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, usePathname, type Href } from "expo-router";
-import { STATUS_LABEL, type JobStatus } from "@heft/shared";
-import { demoMode } from "../lib/supabase";
-import { DemoSwitch } from "./DemoSwitch";
+import { APP_WORDMARK, STATUS_LABEL, type JobStatus } from "@heft/shared";
 
 export function Screen({
   title,
@@ -26,10 +24,9 @@ export function Screen({
             <Text className="text-xs font-semibold uppercase tracking-widest text-amber">Back</Text>
           </Pressable>
         ) : (
-          <Text className="text-[11px] font-semibold tracking-[4px] text-amber">HEFT</Text>
+          <Text className="text-sm font-semibold tracking-[2px] text-paper">{APP_WORDMARK}</Text>
         )}
         <Text className="text-2xl font-semibold text-paper">{title}</Text>
-        {demoMode ? <DemoSwitch /> : null}
       </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: footer ? 120 : 40 }}>
         {children}

@@ -44,6 +44,50 @@ export function quoteCents(
   return Math.round(raw * sizeMult * vehicleMult);
 }
 
+/** DEFAULT flat add-on when any stairs are declared. Not per flight. */
+export const STAIRS_ADDON_CENTS = 1500;
+/** DEFAULT flat add-on when the customer asks for a helper. */
+export const HELPER_ADDON_CENTS = 2000;
+
+export type QuoteLineKey = "base_miles" | "size" | "stairs" | "helper";
+
+export type QuoteLine = {
+  key: QuoteLineKey;
+  label: string;
+  cents: number;
+};
+
+/**
+ * Line items always sum to total_cents. Stairs and helper are flat.
+ * Drop-off placement is not an input: it never changes the price.
+ */
+export function quoteLines(
+  rule: Pick<PricingRule, "base_cents" | "per_mile_cents" | "min_cents" | "size_multiplier" | "vehicle_type">,
+  miles: number,
+  options: { stairs?: boolean; helper?: boolean; vehicleLabel: string; sizeLabel: string },
+): { lines: QuoteLine[]; total_cents: number } {
+  const vehicleMult = VEHICLE_MULTIPLIERS[rule.vehicle_type] ?? 1;
+  const sizeMult = asNumber(rule.size_multiplier);
+  if (!Number.isFinite(miles) || miles < 0) throw new Error("Miles must be a non-negative number");
+  if (!Number.isFinite(sizeMult) || sizeMult <= 0) throw new Error("Size multiplier is invalid");
+  const raw = Math.max(rule.min_cents, rule.base_cents + rule.per_mile_cents * miles);
+  const base = Math.round(raw * vehicleMult);
+  const sized = Math.round(base * sizeMult);
+  const lines: QuoteLine[] = [
+    { key: "base_miles", label: `${options.vehicleLabel} · ${miles.toFixed(1)} mi`, cents: base },
+  ];
+  const sizeCents = sized - base;
+  if (sizeCents !== 0) lines.push({ key: "size", label: `${options.sizeLabel} item`, cents: sizeCents });
+  if (options.stairs) lines.push({ key: "stairs", label: "Stairs", cents: STAIRS_ADDON_CENTS });
+  if (options.helper) lines.push({ key: "helper", label: "Helper to load", cents: HELPER_ADDON_CENTS });
+  return { lines, total_cents: lines.reduce((sum, line) => sum + line.cents, 0) };
+}
+
+/** Driver share of a fare, computed from the platform rate. Never a hardcoded 85. */
+export function driverKeepPercent(): number {
+  return Math.round((1 - PLATFORM_FEE_RATE) * 100);
+}
+
 export function splitCents(finalCents: number): {
   platform_fee_cents: number;
   driver_payout_cents: number;

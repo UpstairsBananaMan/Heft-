@@ -1,4 +1,6 @@
-/** Pensacola MVP box: 30.1–30.7 N, 87.6–86.9 W. */
+import { APP_NAME } from "./brand";
+
+/** Pensacola MVP box. Coordinates stay in code, never in customer copy. */
 export const PENSACOLA_BOX = {
   minLat: 30.1,
   maxLat: 30.7,
@@ -10,8 +12,22 @@ export const PENSACOLA_CENTER = { lat: 30.4213, lng: -87.2169 };
 
 const EARTH_MILES = 3958.7613;
 
-export function serviceAreaHint(): string {
-  return "That spot is outside Pensacola. Heft covers about 30.1–30.7 north and 87.6–86.9 west.";
+export function serviceAreaHint(address?: string): string {
+  if (address) return `We only serve the Pensacola area right now. ${address} is outside it.`;
+  return `${APP_NAME} only serves the Pensacola area right now.`;
+}
+
+/** Neighbourhood label for a stored address. Never returns coordinates. */
+export function neighbourhood(address: string): string {
+  const value = address.toLowerCase();
+  if (value.includes("gadsden")) return "East Hill";
+  if (value.includes("9th")) return "Cordova";
+  if (value.includes("government") || value.includes("palafox")) return "Downtown";
+  if (value.includes("airport")) return "Airport";
+  if (value.includes("fairfield")) return "Myrtle Grove";
+  if (value.includes("spring")) return "North Hill";
+  if (value.includes("davis")) return "Davis Hwy";
+  return "Pensacola";
 }
 
 export function inPensacola(lat: number, lng: number): boolean {
