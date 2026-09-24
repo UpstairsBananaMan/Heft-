@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Linking, Platform, Text } from "react-native";
+import { Linking, Platform, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,13 +11,46 @@ import {
   nextDriverStatus,
   type Job,
   type JobEvent,
+  type JobStatus,
 } from "@heft/shared";
 import { CancelBox, DisputeBox } from "../../../src/components/JobActions";
-import { Button, ErrorText, Notice, Screen, StatusPill } from "../../../src/components/ui";
+import { Button, EmptyState, ErrorText, Notice, Screen, StatusPill } from "../../../src/components/ui";
 import { errorText, invoke } from "../../../src/lib/invoke";
 import { uploadJobImage } from "../../../src/lib/photos";
 import { supabase } from "../../../src/lib/supabase";
 import { useSession } from "../../../src/store/session";
+import { toast } from "../../../src/store/toast";
+
+const RAIL: { key: JobStatus; label: string }[] = [
+  { key: "assigned", label: "Assigned" },
+  { key: "en_route_pickup", label: "To pickup" },
+  { key: "at_pickup", label: "At pickup" },
+  { key: "en_route_dropoff", label: "To drop-off" },
+  { key: "at_dropoff", label: "At drop-off" },
+  { key: "delivered", label: "Delivered" },
+  { key: "paid", label: "Paid" },
+];
+
+function StatusRail({ status }: { status: JobStatus }) {
+  const index = RAIL.findIndex((step) => step.key === status);
+  if (index < 0) return null;
+  return (
+    <View className="mb-4 flex-row flex-wrap">
+      {RAIL.map((step, stepIndex) => {
+        const reached = stepIndex <= index;
+        const current = stepIndex === index;
+        return (
+          <View key={step.key} className="mb-2 mr-3">
+            <Text className={`text-[11px] font-semibold uppercase tracking-wider ${reached ? "text-charcoal" : "text-steel"}`}>
+              {step.label}
+            </Text>
+            <View className={`mt-1 h-1 w-12 ${current ? "bg-amber" : reached ? "bg-charcoal" : "bg-line"}`} />
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 export default function DriverJob() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -103,6 +136,12 @@ export default function DriverJob() {
   const row = job.data;
   const next = row ? nextDriverStatus(row.status) : null;
 
+  function fail(err: unknown) {
+    const message = errorText(err);
+    setError(message);
+    toast(message);
+  }
+
   async function accept() {
     setPending(true);
     setError("");
@@ -110,40 +149,55 @@ export default function DriverJob() {
       await invoke("accept-job", { job_id: id });
       await queryClient.invalidateQueries({ queryKey: ["job", id] });
       await queryClient.invalidateQueries({ queryKey: ["open-jobs"] });
+      toast("Job accepted. Head to pickup.", "ok");
     } catch (err) {
-      setError(errorText(err));
+      fail(err);
     } finally {
       setPending(false);
     }
   }
 
-  async function advance(status: string) {
+  async function advance(status: JobStatus) {
     setPending(true);
     setError("");
     try {
       await invoke("update-job-status", { job_id: id, status });
       await job.refetch();
+      toast(`Marked ${STATUS_LABEL[status]}.`, "ok");
     } catch (err) {
-      setError(errorText(err));
+      fail(err);
     } finally {
       setPending(false);
     }
   }
 
-  async function addPod() {
+  async function addPod(source: "camera" | "library") {
     setError("");
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!row) return;
+    const permission =
+      source === "camera"
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setError("Photo permission is required for proof of delivery.");
+      const message =
+        source === "camera"
+          ? "Camera permission is required to photograph the delivery."
+          : "Photo library permission is required for proof of delivery.";
+      setError(message);
+      toast(message);
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
-    if (result.canceled || !result.assets[0] || !row) return;
+    const result =
+      source === "camera"
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.7 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
+    if (result.canceled || !result.assets[0]) return;
     try {
       await uploadJobImage("pod", row.id, result.assets[0].uri);
       await refreshPod();
+      toast("Proof photo saved.", "ok");
     } catch (err) {
-      setError(errorText(err));
+      fail(err);
     }
   }
 
@@ -154,8 +208,9 @@ export default function DriverJob() {
       await invoke("complete-job", { job_id: id });
       await job.refetch();
       await queryClient.invalidateQueries({ queryKey: ["earnings"] });
+      toast("Payout recorded. Check Earnings.", "ok");
     } catch (err) {
-      setError(errorText(err));
+      fail(err);
     } finally {
       setPending(false);
     }
@@ -172,21 +227,30 @@ export default function DriverJob() {
 
   return (
     <Screen title="Job" back>
-      {!row ? <Text className="text-sm text-steel">This job is not visible. Go online inside your service area, or it was already taken.</Text> : null}
+      {job.isError ? <EmptyState title="Could not load this job" body={(job.error as Error).message} /> : null}
+      {!job.isLoading && !job.isError && !row ? (
+        <EmptyState
+          title="Job not visible"
+          body="Go online inside your service area with an approved vehicle, or this job was already taken."
+        />
+      ) : null}
       {row ? (
         <>
           <StatusPill status={row.status} />
-          <Text className="mt-3 text-xl font-semibold text-charcoal">{row.item_description}</Text>
+          <View className="mt-3">
+            <StatusRail status={row.status} />
+          </View>
+          <Text className="text-xl font-semibold text-charcoal">{row.item_description}</Text>
           <Text className="mt-2 text-sm leading-5 text-steel">
             {row.pickup_address}
             {"\n"}→ {row.dropoff_address}
           </Text>
           <Text className="mt-3 font-mono text-lg">{formatUsd(row.driver_payout_cents)} payout</Text>
           {row.stripe_payment_intent_id?.startsWith("pi_sandbox_") ? (
-            <Notice>Sandbox hold. Completing the job records a pending payout.</Notice>
+            <Notice>Sandbox hold. Completing the job records a pending payout. No card is charged.</Notice>
           ) : null}
           {error ? <ErrorText>{error}</ErrorText> : null}
-          {row.status === "open" ? <Button label={pending ? "Accepting" : "Accept job"} disabled={pending} onPress={accept} /> : null}
+          {row.status === "open" ? <Button label={pending ? "Accepting" : "Accept job"} disabled={pending} onPress={() => void accept()} /> : null}
           {row.driver_id === profile?.id && row.status !== "open" ? (
             <>
               {["assigned", "en_route_pickup", "at_pickup"].includes(row.status) ? (
@@ -196,23 +260,35 @@ export default function DriverJob() {
                 <Button label="Navigate to drop-off" tone="charcoal" onPress={() => navigate(row.dropoff_lat, row.dropoff_lng)} />
               ) : null}
               {next && next !== "delivered" ? (
-                <Button label={pending ? "Updating" : `Mark ${STATUS_LABEL[next]}`} disabled={pending} onPress={() => advance(next)} />
+                <Button label={pending ? "Updating" : `Mark ${STATUS_LABEL[next]}`} disabled={pending} onPress={() => void advance(next)} />
               ) : null}
               {row.status === "at_dropoff" || row.status === "delivered" ? (
                 <>
-                  <Text className="mb-2 mt-4 text-sm text-steel">Proof of delivery: {podCount} photo(s). At least one is required.</Text>
-                  <Button label="Upload POD photo" tone="ghost" onPress={addPod} />
+                  <Text className="mb-2 mt-2 text-sm font-semibold text-charcoal">Proof of delivery</Text>
+                  {podCount < 1 ? (
+                    <Notice>Add a photo of the load at the drop-off. Mark delivered stays locked until one photo is saved.</Notice>
+                  ) : (
+                    <Text className="mb-3 text-sm text-steel">
+                      {podCount} photo{podCount === 1 ? "" : "s"} attached.
+                    </Text>
+                  )}
+                  <Button label="Take photo" onPress={() => void addPod("camera")} />
+                  <Button label="Choose from library" tone="ghost" onPress={() => void addPod("library")} />
                 </>
               ) : null}
               {next === "delivered" ? (
                 <Button
-                  label={pending ? "Updating" : "Mark delivered"}
+                  label={podCount < 1 ? "Photo required to mark delivered" : pending ? "Updating" : "Mark delivered"}
                   disabled={pending || podCount < 1}
-                  onPress={() => advance("delivered")}
+                  onPress={() => void advance("delivered")}
                 />
               ) : null}
               {row.status === "delivered" ? (
-                <Button label={pending ? "Completing" : "Complete and record payout"} disabled={pending || podCount < 1} onPress={complete} />
+                <Button
+                  label={podCount < 1 ? "Photo required to complete" : pending ? "Completing" : "Complete and record payout"}
+                  disabled={pending || podCount < 1}
+                  onPress={() => void complete()}
+                />
               ) : null}
               {row.status === "paid" ? (
                 <Button label="Rate customer" onPress={() => router.push(`/(driver)/rate/${row.id}`)} />

@@ -1,37 +1,38 @@
 import { useState } from "react";
-import { Text } from "react-native";
+import { Text, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SIZE_LABEL, VEHICLE_LABEL, formatUsd, type Job } from "@heft/shared";
-import { Button, ErrorText, Notice, Screen } from "../../../src/components/ui";
+import { Button, EmptyState, Notice, Screen, Steps } from "../../../src/components/ui";
 import { errorText, invoke } from "../../../src/lib/invoke";
 import { supabase } from "../../../src/lib/supabase";
+import { toast } from "../../../src/store/toast";
 
 export default function QuoteConfirm() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const job = useQuery({
     queryKey: ["job", id],
     queryFn: async () => {
       const { data, error: queryError } = await supabase.from("jobs").select("*").eq("id", id).maybeSingle();
       if (queryError) throw queryError;
+      if (!data) throw new Error("Quote not found.");
       return data as Job;
     },
   });
 
   async function publish() {
     setPending(true);
-    setError("");
     try {
       const result = await invoke<{ sandbox?: boolean }>("publish-job", { job_id: id });
       await queryClient.invalidateQueries({ queryKey: ["job", id] });
       await queryClient.invalidateQueries({ queryKey: ["my-jobs"] });
+      toast(result.sandbox ? "Published with a sandbox payment hold." : "Hold authorized. Job is open.", "ok");
       router.replace(`/(customer)/job/${id}?sandbox=${result.sandbox ? "1" : "0"}`);
     } catch (err) {
-      setError(errorText(err));
+      toast(errorText(err));
     } finally {
       setPending(false);
     }
@@ -40,7 +41,9 @@ export default function QuoteConfirm() {
   const row = job.data;
   return (
     <Screen title="Quote" back>
-      {!row ? <Text className="text-sm text-steel">Loading quote.</Text> : null}
+      <Steps labels={["Stops", "Load", "Price"]} current={2} />
+      {job.isLoading ? <Text className="text-sm text-steel">Loading the quote.</Text> : null}
+      {job.error ? <EmptyState title="Quote unavailable" body={(job.error as Error).message} /> : null}
       {row ? (
         <>
           <Text className="text-lg font-semibold text-charcoal">{row.item_description}</Text>
@@ -51,13 +54,22 @@ export default function QuoteConfirm() {
           <Text className="mt-4 text-sm text-steel">
             {SIZE_LABEL[row.size_category]} · {VEHICLE_LABEL[row.vehicle_required]} · {Number(row.distance_miles ?? 0).toFixed(2)} mi
           </Text>
-          <Text className="mt-4 font-mono text-4xl text-charcoal">{formatUsd(row.estimate_cents)}</Text>
-          <Text className="mt-2 text-sm leading-5 text-steel">
-            Publishing places a hold for this amount. Capture happens after proof of delivery. Without Stripe keys the hold id is a sandbox PaymentIntent.
-          </Text>
-          {error ? <ErrorText>{error}</ErrorText> : null}
-          <Button label={pending ? "Authorizing" : "Authorize hold and publish"} disabled={pending || row.status !== "priced"} onPress={publish} />
-          {row.status !== "priced" ? <Notice>This job is {row.status}. Quote it again from a draft if the price is missing.</Notice> : null}
+          <View className="my-4 border border-line bg-white px-4 py-5">
+            <Text className="text-xs font-semibold uppercase tracking-wider text-steel">Customer total</Text>
+            <Text className="mt-2 font-mono text-4xl text-charcoal">{formatUsd(row.estimate_cents)}</Text>
+            <Text className="mt-3 text-sm leading-5 text-steel">
+              This is a hold, not a capture. The card is charged after proof of delivery. Without Stripe keys the hold id starts with pi_sandbox_.
+            </Text>
+          </View>
+          {row.status !== "priced" ? (
+            <Notice>This job is {row.status}. Go back and quote the draft again if the price is missing.</Notice>
+          ) : null}
+          <Button
+            label={pending ? "Authorizing hold" : "Authorize hold and publish"}
+            disabled={pending || row.status !== "priced" || row.estimate_cents == null}
+            onPress={publish}
+          />
+          <Button label="Edit request" tone="ghost" onPress={() => router.back()} />
         </>
       ) : null}
     </Screen>

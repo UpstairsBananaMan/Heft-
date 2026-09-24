@@ -4,6 +4,7 @@ import { canCancel, canOpenDispute, type Job, type Role } from "@heft/shared";
 import { Button, ErrorText, Field } from "./ui";
 import { errorText, invoke } from "../lib/invoke";
 import { supabase } from "../lib/supabase";
+import { toast } from "../store/toast";
 
 export function CancelBox({ job, role, onDone }: { job: Job; role: Role; onDone: () => void }) {
   const [reason, setReason] = useState("");
@@ -18,7 +19,9 @@ export function CancelBox({ job, role, onDone }: { job: Job; role: Role; onDone:
       await invoke("update-job-status", { job_id: job.id, status: "cancelled", cancel_reason: reason });
       onDone();
     } catch (err) {
-      setError(errorText(err));
+      const message = errorText(err);
+      setError(message);
+      toast(message);
     } finally {
       setPending(false);
     }
@@ -66,7 +69,9 @@ export function DisputeBox({
       await invoke("notify", { job_id: job.id, event: "disputed" }).catch(() => undefined);
       onDone();
     } catch (err) {
-      setError(errorText(err));
+      const message = errorText(err);
+      setError(message);
+      toast(message);
     } finally {
       setPending(false);
     }
