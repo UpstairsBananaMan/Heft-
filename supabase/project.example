@@ -1,0 +1,17 @@
+# Hosted project link. This file is an example. Do not commit a filled-in ref if you prefer to keep it off GitHub.
+#
+# 1. Create a project at https://supabase.com/dashboard
+# 2. Copy the project ref from the dashboard URL:
+#      https://supabase.com/dashboard/project/YOUR_PROJECT_REF
+# 3. From the repo root:
+#      supabase login
+#      supabase link --project-ref YOUR_PROJECT_REF
+#      supabase db push
+#
+# Auth → URL configuration on the hosted project must allow:
+#   heft://auth/callback
+#   the admin site URL (for example https://YOUR_ADMIN_HOST)
+#
+# Edge function secrets (set in the dashboard or CLI, never in git):
+#   supabase secrets set STRIPE_SECRET_KEY=... STRIPE_WEBHOOK_SECRET=... GOOGLE_MAPS_API_KEY=...
+# Leave them unset to keep the sandbox adapters.

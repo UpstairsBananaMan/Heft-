@@ -3,6 +3,7 @@ import { Platform, Text } from "react-native";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
+import { isValidPhone } from "@heft/shared";
 import { Button, ErrorText, Field, Notice, Screen } from "../components/ui";
 import { errorText } from "../lib/invoke";
 import { supabase } from "../lib/supabase";
@@ -26,6 +27,14 @@ export function AccountScreen({
 
   async function save() {
     if (!profile) return;
+    if (name.trim().length < 2) {
+      setError("Display name needs at least 2 characters.");
+      return;
+    }
+    if (phone.trim() && !isValidPhone(phone)) {
+      setError("Phone needs at least 10 digits, or leave it blank.");
+      return;
+    }
     setError("");
     const { error: updateError } = await supabase
       .from("users")
@@ -86,6 +95,11 @@ export function AccountScreen({
         </>
       ) : null}
       <ViewGap />
+      <Button label="Privacy Policy (draft)" tone="ghost" onPress={() => router.push("/legal/privacy")} />
+      <Button label="Terms of Service (draft)" tone="ghost" onPress={() => router.push("/legal/terms")} />
+      <Text className="mb-4 text-xs leading-5 text-steel">
+        Those pages are drafts, not legal advice. The same text is on the admin site at /legal/privacy and /legal/terms.
+      </Text>
       <Button
         label="Sign out"
         tone="ghost"

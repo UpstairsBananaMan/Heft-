@@ -52,6 +52,33 @@ export function canCancel(status: JobStatus, role: Role): boolean {
   return false;
 }
 
+/** Copy for the cancel control. Null when this role cannot cancel. */
+export function cancelHint(status: JobStatus, role: Role): string | null {
+  if (!canCancel(status, role)) return null;
+  if (role === "customer" && (status === "draft" || status === "priced" || status === "open")) {
+    return "No driver has accepted yet. Cancelling ends the request and releases a sandbox hold.";
+  }
+  if (role === "customer") {
+    return "A driver is assigned. You can cancel until they mark at pickup. The job ends. It does not go back on the map.";
+  }
+  if (role === "driver") {
+    return "You can cancel while assigned or en route to pickup. The job ends for you and the customer.";
+  }
+  return "Cancelling ends the job.";
+}
+
+/** Why the dispute form is hidden. Null when a dispute can be opened. */
+export function disputeBlockedReason(status: JobStatus, paidAt: string | null, now = Date.now()): string | null {
+  if (canOpenDispute(status, paidAt, now)) return null;
+  if (status === "draft" || status === "priced" || status === "open") {
+    return "You can open a dispute after a driver accepts.";
+  }
+  if (status === "cancelled") return "Cancelled jobs cannot be disputed.";
+  if (status === "disputed") return "A dispute is already open. Dispatch reviews it in the admin console.";
+  if (status === "paid") return "The 72-hour window after payment has closed.";
+  return "This job cannot be disputed.";
+}
+
 export function isActiveDelivery(status: JobStatus): boolean {
   return [
     "assigned",

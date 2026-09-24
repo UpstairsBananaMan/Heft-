@@ -29,10 +29,12 @@ export const useSession = create<SessionState>((set, get) => ({
     set({ session: data.session });
     if (data.session) await get().refreshProfile();
     set({ ready: true });
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    supabase.auth.onAuthStateChange(async (event, session) => {
       set({ session });
-      if (session) await get().refreshProfile();
-      else set({ profile: null });
+      if (event === "SIGNED_OUT") set({ profile: null });
+      if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "INITIAL_SESSION") {
+        if (session) await get().refreshProfile();
+      }
     });
   },
   refreshProfile: async () => {

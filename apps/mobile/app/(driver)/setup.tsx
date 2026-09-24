@@ -47,8 +47,14 @@ export default function DriverSetup() {
     const serviceLat = Number(lat);
     const serviceLng = Number(lng);
     const serviceRadius = Number(radius);
-    if (!Number.isFinite(serviceLat) || !Number.isFinite(serviceLng) || !(serviceRadius > 0)) {
-      setError("Service center and radius need valid numbers.");
+    const capacityLbs = Number(capacity);
+    const bedFt = Number(bed);
+    if (!Number.isFinite(serviceLat) || !Number.isFinite(serviceLng) || !(serviceRadius >= 1) || serviceRadius > 100) {
+      setError("Service center must be numbers. Radius is 1 to 100 miles.");
+      return;
+    }
+    if (!Number.isFinite(capacityLbs) || capacityLbs <= 0 || !Number.isFinite(bedFt) || bedFt <= 0) {
+      setError("Capacity and bed length are required. Use numbers greater than zero.");
       return;
     }
     setPending(true);
@@ -56,8 +62,8 @@ export default function DriverSetup() {
     try {
       const payload = {
         vehicle_type: vehicle,
-        capacity_lbs: capacity ? Number(capacity) : null,
-        bed_length_ft: bed ? Number(bed) : null,
+        capacity_lbs: capacityLbs,
+        bed_length_ft: bedFt,
         service_lat: serviceLat,
         service_lng: serviceLng,
         service_radius_miles: serviceRadius,
@@ -86,9 +92,13 @@ export default function DriverSetup() {
   return (
     <Screen title="Vehicle" back>
       <Notice>
-        {row
-          ? `Approval status: ${row.status}. An admin changes that from the web console. You can update the truck and service circle.`
-          : "Submit your vehicle. You stay pending until an admin approves you."}
+        {row?.status === "pending"
+          ? "Pending approval. You cannot go online or accept jobs until an admin taps Approve on the website. This app cannot approve you."
+          : row?.status === "suspended"
+            ? "Suspended. Dispatch turned this vehicle off. You cannot accept jobs until an admin clears it."
+            : row
+              ? `Approval status: ${row.status}. You can update the truck and the service circle.`
+              : "Every field below is required. Submit the vehicle, then wait. You stay pending until an admin approves you."}
       </Notice>
       <Choice
         label="Vehicle"

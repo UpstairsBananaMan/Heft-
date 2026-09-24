@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "expo-router";
+import { isValidEmail } from "@heft/shared";
 import { Button, ErrorText, Field, Screen } from "../../src/components/ui";
 import { errorText } from "../../src/lib/invoke";
 import { supabase } from "../../src/lib/supabase";
@@ -14,6 +15,10 @@ export default function SignIn() {
   const [pending, setPending] = useState(false);
 
   async function submit() {
+    if (!isValidEmail(email) || password.length < 8) {
+      setError("Enter the email and password for this account. Passwords are at least 8 characters.");
+      return;
+    }
     setPending(true);
     setError("");
     try {

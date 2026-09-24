@@ -16,6 +16,7 @@ apps/admin/.env.local
 supabase/.branches
 supabase/.temp
 supabase/.env
+supabase/.project-ref
 
 .DS_Store
 *.log

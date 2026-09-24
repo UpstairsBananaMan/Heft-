@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { haversineMiles, inPensacola, roundMiles, vehicleCovers } from "./geo";
 import { quoteCents, splitCents } from "./pricing";
-import { canCancel, canOpenDispute, nextDriverStatus } from "./status";
+import { canCancel, canOpenDispute, cancelHint, disputeBlockedReason, nextDriverStatus } from "./status";
+import { isValidEmail, isValidPhone, publicSignupRole } from "./signup";
+import { toCsv } from "./csv";
 import type { VehicleType } from "./types";
 
 function rule(
@@ -69,9 +71,20 @@ describe("job transitions", () => {
 
   it("lets a customer cancel before pickup and not after", () => {
     assert.equal(canCancel("open", "customer"), true);
+    assert.equal(canCancel("assigned", "customer"), true);
     assert.equal(canCancel("at_pickup", "customer"), false);
+    assert.equal(canCancel("open", "driver"), false);
     assert.equal(canCancel("assigned", "driver"), true);
     assert.equal(canCancel("en_route_dropoff", "driver"), false);
+    assert.match(cancelHint("open", "customer") ?? "", /No driver has accepted/);
+    assert.match(cancelHint("assigned", "customer") ?? "", /until they mark at pickup/);
+    assert.equal(cancelHint("at_pickup", "customer"), null);
+  });
+
+  it("explains when a dispute cannot be opened", () => {
+    assert.match(disputeBlockedReason("open", null) ?? "", /after a driver accepts/);
+    assert.equal(disputeBlockedReason("assigned", null), null);
+    assert.match(disputeBlockedReason("cancelled", null) ?? "", /cannot be disputed/);
   });
 
   it("closes the dispute window 72 hours after paid", () => {
@@ -82,5 +95,27 @@ describe("job transitions", () => {
     assert.equal(canOpenDispute("open", null), false);
     assert.equal(canOpenDispute("paid", paidAt, within), true);
     assert.equal(canOpenDispute("paid", paidAt, after), false);
+    assert.match(disputeBlockedReason("paid", paidAt, after) ?? "", /72-hour/);
+  });
+});
+
+describe("signup and csv", () => {
+  it("never treats admin as a public signup role", () => {
+    assert.equal(publicSignupRole("admin"), "customer");
+    assert.equal(publicSignupRole("driver"), "driver");
+    assert.equal(publicSignupRole("customer"), "customer");
+    assert.equal(publicSignupRole(null), "customer");
+  });
+
+  it("checks email and phone shape without storing them", () => {
+    assert.equal(isValidEmail("a@b.co"), true);
+    assert.equal(isValidEmail("not-an-email"), false);
+    assert.equal(isValidPhone("(850) 555-0100"), true);
+    assert.equal(isValidPhone("555"), false);
+  });
+
+  it("quotes commas in csv cells", () => {
+    const csv = toCsv(["item", "fee"], [["Sofa, blue", "1050"]]);
+    assert.equal(csv, 'item,fee\n"Sofa, blue",1050\n');
   });
 });

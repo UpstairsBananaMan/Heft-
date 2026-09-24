@@ -104,6 +104,10 @@ export default function CustomerJob() {
             Pickup {row.pickup_address}
             {"\n"}Drop-off {row.dropoff_address}
           </Text>
+          {row.status === "cancelled" && row.cancel_reason ? (
+            <Notice>Cancelled. {row.cancel_reason}</Notice>
+          ) : null}
+          {row.status === "disputed" ? <Notice>A dispute is open. Dispatch reviews it in the admin console.</Notice> : null}
           {row.stripe_payment_intent_id ? (
             <Text className="mt-2 font-mono text-xs text-steel">{row.stripe_payment_intent_id}</Text>
           ) : null}
