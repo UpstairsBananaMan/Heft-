@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { haversineMiles, inPensacola, roundMiles, vehicleCovers } from "./geo";
+import { eventLabel, loadFailureCopy } from "./copy";
+import { haversineMiles, inPensacola, roundMiles, serviceAreaHint, vehicleCovers } from "./geo";
 import { quoteCents, splitCents } from "./pricing";
 import { canCancel, canOpenDispute, cancelHint, disputeBlockedReason, nextDriverStatus } from "./status";
 import { isValidEmail, isValidPhone, publicSignupRole } from "./signup";
@@ -45,6 +46,11 @@ describe("quote formula", () => {
 });
 
 describe("service area and distance", () => {
+  it("names the Pensacola box when a point is outside", () => {
+    assert.equal(inPensacola(30.4213, -87.2169), true);
+    assert.match(serviceAreaHint(), /30\.1–30\.7/);
+  });
+
   it("accepts downtown Pensacola and rejects Mobile", () => {
     assert.equal(inPensacola(30.4213, -87.2169), true);
     assert.equal(inPensacola(30.6954, -88.0399), false);
@@ -112,6 +118,13 @@ describe("signup and csv", () => {
     assert.equal(isValidEmail("not-an-email"), false);
     assert.equal(isValidPhone("(850) 555-0100"), true);
     assert.equal(isValidPhone("555"), false);
+  });
+
+  it("uses plain offline copy and keeps other errors", () => {
+    assert.equal(loadFailureCopy("Network request failed").title, "You look offline");
+    assert.equal(loadFailureCopy("permission denied").title, "Could not load");
+    assert.equal(eventLabel("status_restored"), "Status restored");
+    assert.equal(eventLabel("en_route_pickup"), "En route to pickup");
   });
 
   it("quotes commas in csv cells", () => {

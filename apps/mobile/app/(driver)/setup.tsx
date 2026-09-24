@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { PENSACOLA_CENTER, VEHICLE_LABEL, VEHICLE_TYPES, type DriverProfile, type VehicleType } from "@heft/shared";
+import { inPensacola, PENSACOLA_CENTER, serviceAreaHint, VEHICLE_LABEL, VEHICLE_TYPES, type DriverProfile, type VehicleType } from "@heft/shared";
 import { Button, Choice, ErrorText, Field, Notice, Screen } from "../../src/components/ui";
 import { errorText } from "../../src/lib/invoke";
 import { supabase } from "../../src/lib/supabase";
@@ -55,6 +55,10 @@ export default function DriverSetup() {
     }
     if (!Number.isFinite(capacityLbs) || capacityLbs <= 0 || !Number.isFinite(bedFt) || bedFt <= 0) {
       setError("Capacity and bed length are required. Use numbers greater than zero.");
+      return;
+    }
+    if (!inPensacola(serviceLat, serviceLng)) {
+      setError(serviceAreaHint());
       return;
     }
     setPending(true);

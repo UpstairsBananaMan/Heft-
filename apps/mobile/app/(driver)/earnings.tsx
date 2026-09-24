@@ -1,7 +1,7 @@
 import { Text } from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import { formatUsd, type Payout } from "@heft/shared";
-import { BottomNav, Screen } from "../../src/components/ui";
+import { formatUsd, loadFailureCopy, type Payout } from "@heft/shared";
+import { BottomNav, EmptyState, Screen } from "../../src/components/ui";
 import { supabase } from "../../src/lib/supabase";
 
 const NAV = [
@@ -33,6 +33,13 @@ export default function Earnings() {
       <Text className="mb-6 mt-2 text-sm leading-5 text-steel">
         Pending means the row exists and Connect has not transferred it. Sandbox completions stay pending. This is not a projected forecast.
       </Text>
+      {payouts.isLoading ? <EmptyState title="Loading earnings" body="Reading recorded payouts. A fresh database stays at $0.00." /> : null}
+      {payouts.isError ? (
+        <EmptyState
+          title={loadFailureCopy((payouts.error as Error).message).title}
+          body={loadFailureCopy((payouts.error as Error).message).body}
+        />
+      ) : null}
       {(payouts.data ?? []).map((payout) => {
         const job = Array.isArray(payout.jobs) ? payout.jobs[0] : payout.jobs;
         return (
@@ -41,7 +48,9 @@ export default function Earnings() {
           </Text>
         );
       })}
-      {payouts.data?.length === 0 ? <Text className="text-sm text-steel">No payouts yet.</Text> : null}
+      {payouts.isSuccess && payouts.data.length === 0 ? (
+        <EmptyState title="No payouts yet" body="Complete a delivery with a proof photo. Sandbox payouts stay pending until Stripe Connect is set up." />
+      ) : null}
     </Screen>
   );
 }

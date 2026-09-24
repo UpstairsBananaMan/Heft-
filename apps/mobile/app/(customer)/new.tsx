@@ -3,7 +3,9 @@ import { Pressable, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
+  inPensacola,
   PENSACOLA_PLACES,
+  serviceAreaHint,
   SIZE_CATEGORIES,
   SIZE_LABEL,
   VEHICLE_LABEL,
@@ -87,6 +89,10 @@ export default function NewJob() {
     if (!profile) return;
     if (pickup.label === dropoff.label) {
       fail("Pickup and drop-off need to be different stops.");
+      return;
+    }
+    if (pickup.outside || dropoff.outside || !inPensacola(pickup.lat, pickup.lng) || !inPensacola(dropoff.lat, dropoff.lng)) {
+      fail(serviceAreaHint());
       return;
     }
     if (item.trim().length < 3) {

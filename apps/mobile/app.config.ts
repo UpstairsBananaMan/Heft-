@@ -38,7 +38,10 @@ const config: ExpoConfig = {
       {
         action: "VIEW",
         autoVerify: false,
-        data: [{ scheme: "heft", host: "auth", pathPrefix: "/callback" }],
+        data: [
+      { scheme: "heft", host: "auth", pathPrefix: "/callback" },
+      { scheme: "heft", host: "stripe", pathPrefix: "/connect" },
+    ],
         category: ["BROWSABLE", "DEFAULT"],
       },
     ],
@@ -62,6 +65,9 @@ const config: ExpoConfig = {
     "expo-notifications",
     "expo-secure-store",
   ],
+  extra: process.env.EXPO_PUBLIC_EAS_PROJECT_ID
+    ? { eas: { projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID } }
+    : undefined,
   experiments: { typedRoutes: false },
 };
 

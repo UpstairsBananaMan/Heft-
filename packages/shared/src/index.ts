@@ -6,3 +6,4 @@ export * from "./places";
 export * from "./signup";
 export * from "./csv";
 export * from "./legal";
+export * from "./copy";

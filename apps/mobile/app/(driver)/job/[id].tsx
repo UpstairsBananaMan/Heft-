@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Linking, Platform, Text, View } from "react-native";
+import { AppState, Linking, Platform, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,6 +8,7 @@ import {
   STATUS_LABEL,
   formatUsd,
   isActiveDelivery,
+  loadFailureCopy,
   nextDriverStatus,
   type Job,
   type JobEvent,
@@ -102,6 +103,7 @@ export default function DriverJob() {
     if (!row || !profile || row.driver_id !== profile.id || !isActiveDelivery(row.status)) return;
     let timer: ReturnType<typeof setInterval> | undefined;
     async function ping() {
+      if (AppState.currentState !== "active") return;
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== "granted" || !profile) return;
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -230,7 +232,10 @@ export default function DriverJob() {
 
   return (
     <Screen title="Job" back>
-      {job.isError ? <EmptyState title="Could not load this job" body={(job.error as Error).message} /> : null}
+      {job.isLoading ? <EmptyState title="Loading job" body="Fetching the latest status." /> : null}
+      {job.isError ? (
+        <EmptyState title={loadFailureCopy((job.error as Error).message).title} body={loadFailureCopy((job.error as Error).message).body} />
+      ) : null}
       {!job.isLoading && !job.isError && !row ? (
         <EmptyState
           title="Job not visible"
@@ -249,6 +254,11 @@ export default function DriverJob() {
             {"\n"}→ {row.dropoff_address}
           </Text>
           <Text className="mt-3 font-mono text-lg">{formatUsd(row.driver_payout_cents)} payout</Text>
+          {row.driver_id === profile?.id && isActiveDelivery(row.status) ? (
+            <Text className="mt-2 text-sm leading-5 text-steel">
+              Location updates about every 10 seconds while this delivery is active and the app is open. Faster updates are ignored.
+            </Text>
+          ) : null}
           {row.stripe_payment_intent_id?.startsWith("pi_sandbox_") ? (
             <Notice>Sandbox hold. Completing the job records a pending payout. No card is charged.</Notice>
           ) : null}
