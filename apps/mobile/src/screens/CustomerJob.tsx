@@ -104,7 +104,7 @@ export default function CustomerJob() {
           {index === 1 ? <CelebrationSlot moment="driver-found" /> : null}
           <Text accessibilityLiveRegion="polite" style={{ fontFamily: font.heading, fontSize: 26, color: C.ink }}>{headline}</Text>
           <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 16, marginTop: 4 }}>
-            About {minutes} min to pickup · {row.pickup_address.split(",")[0]}
+            {index === 0 ? row.pickup_address.split(",")[0] : `About ${minutes} min to pickup · ${row.pickup_address.split(",")[0]}`}
           </Text>
           <View accessibilityLabel={`Step ${index + 1} of 4, ${STEPS[index]}, current`} style={{ flexDirection: "row", marginTop: 16, justifyContent: "space-between" }}>
             {STEPS.map((label, step) => (

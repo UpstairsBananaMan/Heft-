@@ -25,7 +25,8 @@ export default function WhereScreen() {
       setFocus("dropoff");
       if (booking.dropoff && booking.dropoff.address !== place.address) {
         booking.patch({ step: "item" });
-        router.back();
+        if (router.canGoBack()) router.back();
+        else router.replace("/(customer)/home");
       }
       return;
     }
@@ -34,7 +35,8 @@ export default function WhereScreen() {
     const pickup = booking.pickup;
     if (pickup && pickup.address !== place.address) {
       booking.patch({ step: "item" });
-      router.back();
+      if (router.canGoBack()) router.back();
+      else router.replace("/(customer)/home");
     } else {
       setFocus("pickup");
     }
@@ -69,9 +71,10 @@ export default function WhereScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <AddressField
-              label="Pickup · Current location"
+              label="Pickup"
               value={pickupText}
               placeholder="Pickup address"
+              autoFocus={!booking.pickup}
               onFocus={() => setFocus("pickup")}
               onChangeText={(value) => {
                 setPickupText(value);
@@ -82,7 +85,7 @@ export default function WhereScreen() {
               label="Drop-off"
               value={dropText}
               placeholder="Drop-off"
-              autoFocus
+              autoFocus={Boolean(booking.pickup)}
               onFocus={() => setFocus("dropoff")}
               onChangeText={(value) => {
                 setDropText(value);

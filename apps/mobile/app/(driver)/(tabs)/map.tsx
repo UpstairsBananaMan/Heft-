@@ -114,7 +114,7 @@ export default function DriverJobs() {
           </Pressable>
         ) : null}
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-          <Text style={{ fontFamily: font.heading, fontSize: 22 }}>{rows.length} jobs near you</Text>
+          <Text style={{ fontFamily: font.heading, fontSize: 22 }}>{rows.length === 1 ? "1 job near you" : `${rows.length} jobs near you`}</Text>
           <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 14 }}>Highest pay first</Text>
         </View>
         {!online ? (

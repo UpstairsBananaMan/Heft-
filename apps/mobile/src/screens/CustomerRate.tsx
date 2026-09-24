@@ -29,8 +29,8 @@ export default function RateJob() {
         const driver = (data as { driver_id: string | null } | null)?.driver_id ?? null;
         setDriverId(driver);
         if (!driver) return;
-        const person = await supabase.from("users").select("display_name").eq("id", driver).maybeSingle();
-        const display = (person.data as { display_name?: string } | null)?.display_name;
+        const { data: card, error } = await supabase.functions.invoke("assigned_driver_card", { body: { job_id: id } });
+        const display = !error && card && typeof card === "object" ? (card as { display_name?: string }).display_name : undefined;
         if (display) setName(display.split(" ")[0]);
       });
   }, [id]);

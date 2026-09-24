@@ -13,7 +13,7 @@ const STEPS = [
   { id: "vehicle_photo", title: "Vehicle photo", body: "One photo, plate visible", icon: Camera },
   { id: "license", title: "Driver's license", body: "Front of your license", icon: IdCard },
   { id: "insurance", title: "Insurance", body: "We'll review the card", icon: ShieldCheck },
-  { id: "payouts", title: "Payouts", body: "Connect your bank", icon: Landmark },
+  { id: "payouts", title: "Payouts", body: "Set up your bank", icon: Landmark },
   { id: "area", title: "Where you'll drive", body: "A ZIP in Pensacola", icon: Truck },
 ] as const;
 
