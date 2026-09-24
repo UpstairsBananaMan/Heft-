@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { APP_NAME } from "@heft/shared";
 
 export default function LegalLayout({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
-      <p className="text-xs font-semibold tracking-[0.28em] text-amber">HEFT</p>
+      <p className="text-xs font-semibold tracking-[0.28em] text-charcoal">{APP_NAME.toUpperCase()}</p>
       <p className="mt-4 border border-amber bg-white px-4 py-3 text-sm font-semibold">
         DRAFT. Not legal advice. Replace this before a public release.
       </p>

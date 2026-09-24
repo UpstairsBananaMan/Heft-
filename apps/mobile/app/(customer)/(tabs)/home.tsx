@@ -127,7 +127,7 @@ export default function CustomerHome() {
   const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date()));
   const hello = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
-  const sheetHeight = booking.step === "home" ? Math.round(window.height * [0.5, 0.72, 0.94][snap]) : Math.round(window.height * 0.86);
+  const sheetHeight = booking.step === "home" ? Math.round(window.height * [0.5, 0.72, 0.94][snap]) : booking.step === "size" ? undefined : Math.round(window.height * 0.86);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.paper }}>

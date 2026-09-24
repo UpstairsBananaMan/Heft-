@@ -101,9 +101,13 @@ export default function DriverJobs() {
               trackColor={{ true: C.green, false: C.sand300 }}
             />
           </View>
-          <View style={{ backgroundColor: C.ink, borderRadius: 999, paddingHorizontal: 14, minHeight: 44, justifyContent: "center" }}>
-            <Text style={{ color: C.paper, fontFamily: font.semi, fontSize: 14 }}>Today {formatUsd(payouts.data ?? 0)}</Text>
-          </View>
+          {payouts.isLoading ? (
+            <View style={{ width: 108, height: 44, borderRadius: 999, backgroundColor: C.sand150 }} />
+          ) : (
+            <View style={{ backgroundColor: C.ink, borderRadius: 999, paddingHorizontal: 14, minHeight: 44, justifyContent: "center" }}>
+              <Text style={{ color: C.paper, fontFamily: font.semi, fontSize: 14 }}>Today {formatUsd(payouts.data ?? 0)}</Text>
+            </View>
+          )}
         </View>
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
@@ -113,10 +117,18 @@ export default function DriverJobs() {
             <Text style={{ color: C.steel, marginTop: 4, fontFamily: font.body, fontSize: 14 }}>{active.pickup_address}</Text>
           </Pressable>
         ) : null}
+        {jobs.isLoading ? (
+          <View style={{ gap: 10 }}>
+            <View style={{ width: 180, height: 28, borderRadius: 8, backgroundColor: C.sand150 }} />
+            <View style={{ height: 120, borderRadius: 18, backgroundColor: C.sand150 }} />
+            <View style={{ height: 120, borderRadius: 18, backgroundColor: C.sand150 }} />
+          </View>
+        ) : (
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
           <Text style={{ fontFamily: font.heading, fontSize: 22 }}>{rows.length === 1 ? "1 job near you" : `${rows.length} jobs near you`}</Text>
           <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 14 }}>Highest pay first</Text>
         </View>
+        )}
         {!online ? (
           <View style={{ alignItems: "flex-start", gap: 12 }}>
             <Text style={{ fontFamily: font.body, fontSize: 16, color: C.steel }}>You're offline. Go online to see jobs near you.</Text>

@@ -1,4 +1,4 @@
-import { applyDemo, createDemoQuery, createDemoState, DEMO_IDS, type DemoRequest, type DemoState } from "@heft/shared";
+import { applyDemo, createDemoQuery, createDemoState, DEMO_IDS, prepareDemoState, type DemoRequest, type DemoState } from "@heft/shared";
 
 export const demoMode = process.env.EXPO_PUBLIC_DEMO_MODE === "1";
 
@@ -50,7 +50,9 @@ function loadMemory(): DemoState {
   const raw = storage()?.getItem(STATE_KEY);
   if (raw) {
     try {
-      memory = JSON.parse(raw) as DemoState;
+      const prepared = prepareDemoState(JSON.parse(raw) as unknown);
+      memory = prepared.state;
+      if (prepared.migrated) storage()?.setItem(STATE_KEY, JSON.stringify(memory));
       return memory;
     } catch {
       // Fall through to a fresh sample.

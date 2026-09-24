@@ -104,7 +104,7 @@ export function Confetti({ count, play }: { count: number; play: boolean }) {
         const side = index % 2 === 0;
         return {
           id: index,
-          x: side ? 8 + (index % 5) * 14 : width - 28 - (index % 5) * 14,
+          x: side ? 8 + (index % 5) * 12 : width - 44 - (index % 5) * 12,
           delay: (index % 8) * 40,
           drift: side ? 10 : -10,
           spin: index % 2 === 0 ? 40 : -50,
@@ -117,7 +117,7 @@ export function Confetti({ count, play }: { count: number; play: boolean }) {
   );
   if (!play) return null;
   return (
-    <View accessible={false} pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, height, zIndex: 1 }}>
+    <View accessible={false} pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, height, zIndex: 1, overflow: "hidden" }}>
       {pieces.map((piece) => (
         <Piece key={piece.id} {...piece} />
       ))}
@@ -151,13 +151,13 @@ function Piece({
   }, [delay, progress]);
   const style = useAnimatedStyle(() => ({
     transform: [
-      { translateY: -20 + progress.value * 220 },
+      { translateY: progress.value * 160 },
       { translateX: progress.value * drift },
       { rotate: `${progress.value * spin}deg` },
     ],
     opacity: 1 - progress.value * 0.15,
   }));
-  return <Animated.View style={[{ position: "absolute", left: x, top: 8, width: w, height: h, backgroundColor: color, borderRadius: 1 }, style]} />;
+  return <Animated.View style={[{ position: "absolute", left: x, top: 88, width: w, height: h, backgroundColor: color, borderRadius: 1 }, style]} />;
 }
 
 export function PulseRing() {

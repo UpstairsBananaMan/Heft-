@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { applyDemo, createDemoQuery, createDemoState, DEMO_IDS, type DemoRequest, type DemoState } from "@heft/shared";
+import { applyDemo, createDemoQuery, createDemoState, DEMO_IDS, prepareDemoState, type DemoRequest, type DemoState } from "@heft/shared";
 
 const file = path.join(process.cwd(), ".demo-state.json");
 
@@ -10,10 +10,17 @@ export function demoModeEnabled(): boolean {
 
 function readState(): DemoState {
   try {
-    return JSON.parse(fs.readFileSync(file, "utf8")) as DemoState;
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as unknown;
+    const prepared = prepareDemoState(parsed);
+    if (prepared.migrated) fs.writeFileSync(file, JSON.stringify(prepared.state));
+    return prepared.state;
   } catch {
     const seed = createDemoState();
-    fs.writeFileSync(file, JSON.stringify(seed));
+    try {
+      fs.writeFileSync(file, JSON.stringify(seed));
+    } catch {
+      // A read-only disk still gets a fresh in-memory sample.
+    }
     return seed;
   }
 }
