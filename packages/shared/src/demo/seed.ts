@@ -3,7 +3,7 @@ import { SERVICE_ZONE_ZIPS } from "../pricing/zone";
 import { chicagoDate } from "../pricing/clock";
 import type { DemoState } from "./types";
 
-export const DEMO_SCHEMA_VERSION = 3;
+export const DEMO_SCHEMA_VERSION = 4;
 
 export const DEMO_IDS = {
   admin: "a0000000-0000-4000-8000-000000000001",
@@ -191,7 +191,7 @@ export function createDemoState(now = new Date().toISOString()): DemoState {
     jobs: [
       job(DEMO_IDS.openJob, "open", "Dresser", 30.4088, -87.2166, "21 E Government St, Pensacola, FL", 30.4758, -87.208, "5100 N 9th Ave, Pensacola, FL", null, 7000, now, "furniture"),
       job(DEMO_IDS.activeJob, "en_route_pickup", "Couch", 30.436, -87.191, "1200 E Gadsden St, Pensacola, FL", 30.4758, -87.208, "5100 N 9th Ave, Pensacola, FL", DEMO_IDS.driver, 10200, now, "couch"),
-      job(DEMO_IDS.dropoffJob, "at_dropoff", "Fridge", 30.421, -87.283, "4100 W Fairfield Dr, Pensacola, FL", 30.4088, -87.2166, "21 E Government St, Pensacola, FL", DEMO_IDS.driver, 9600, now, "appliance_other"),
+      pricedJob(DEMO_IDS.dropoffJob, "at_dropoff", "Fridge", "appliance_fridge", "large", 8, true, true, 0, 0, true, DEMO_IDS.driver, now, "32506", "32502", DEMO_IDS.partner),
       job(DEMO_IDS.paidTable, "paid", "Dining table", 30.4088, -87.2166, "21 E Government St, Pensacola, FL", 30.436, -87.191, "1200 E Gadsden St, Pensacola, FL", DEMO_IDS.driver, 7000, now, "furniture"),
       job(DEMO_IDS.paidMattress, "paid", "Mattress", 30.4758, -87.208, "5100 N 9th Ave, Pensacola, FL", 30.421, -87.283, "4100 W Fairfield Dr, Pensacola, FL", DEMO_IDS.driver, 12000, now, "mattress"),
       job(DEMO_IDS.disputedJob, "disputed", "Bookshelf", 30.4733, -87.1867, "2430 Airport Blvd, Pensacola, FL", 30.4088, -87.2166, "21 E Government St, Pensacola, FL", DEMO_IDS.driver, 8800, now, "furniture"),
@@ -347,7 +347,7 @@ function job(
     needs_second_person: false,
     weight_band: null,
     billable_miles: 5,
-    distance_source: "maps",
+    distance_source: "demo",
     est_job_minutes: 60,
     rates_version: PICKUP_RATES.ratesVersion,
     quoted_at: now,
@@ -495,5 +495,6 @@ function pricedJob(
     dropoff_in_zone: dropoffInZone,
     partner_driver_id: partnerId,
     pickup_notes: null,
+    distance_source: "demo",
   };
 }

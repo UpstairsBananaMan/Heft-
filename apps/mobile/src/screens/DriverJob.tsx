@@ -7,6 +7,7 @@ import {
   DRIVER_ACTION,
   formatUsd,
   haversineMiles,
+  chicagoDate,
   neighbourhood,
   nextDriverStatus,
   payoutAnnounce,
@@ -16,6 +17,7 @@ import {
   type JobStatus,
 } from "@heft/shared";
 import { JobMap } from "../components/JobMap";
+import { PartnerSheet } from "../components/PartnerSheet";
 import { Confetti, CountUp, SkipLayer, useDelight } from "../components/delight";
 import { Illustration } from "../components/Illustration";
 import { C, font, HoldToAccept, OutlineButton, PrimaryButton } from "../components/v2";
@@ -41,6 +43,22 @@ export default function DriverJob() {
   const [pending, setPending] = useState(false);
   const [photo, setPhoto] = useState(false);
   const [donePay, setDonePay] = useState<number | null>(null);
+  const [partnerOpen, setPartnerOpen] = useState(false);
+  const today = chicagoDate();
+  const partnership = useQuery({
+    queryKey: ["my-partner", profile?.id, today],
+    enabled: Boolean(profile?.id),
+    queryFn: async () => {
+      const { data, error: queryError } = await supabase
+        .from("driver_partnerships")
+        .select("id, status, shift_date")
+        .eq("lead_id", profile!.id)
+        .eq("status", "accepted")
+        .eq("shift_date", today);
+      if (queryError) throw queryError;
+      return (data ?? []) as { id: string }[];
+    },
+  });
   const job = useQuery({
     queryKey: ["job", id],
     queryFn: async () => {
@@ -80,8 +98,13 @@ export default function DriverJob() {
           {row.item_description} · {neighbourhood(row.pickup_address)} to {neighbourhood(row.dropoff_address)}
         </Text>
         {row.needs_second_person ? <Text style={{ fontFamily: font.body, fontSize: 16, marginBottom: 8 }}>Second person gets {formatUsd(row.helper_payout_cents)}, paid to them directly.</Text> : null}
-        {row.needs_second_person && !row.partner_driver_id ? null : <HoldToAccept onAccept={() => accept(row.id)} />}
+        {row.needs_second_person && (partnership.data ?? []).length === 0 ? (
+          <OutlineButton label="Add a partner first" onPress={() => setPartnerOpen(true)} />
+        ) : (
+          <HoldToAccept onAccept={() => accept(row.id)} />
+        )}
         {error ? <Text style={{ color: C.red, marginTop: 8 }}>{error}</Text> : null}
+        <PartnerSheet open={partnerOpen} onClose={() => setPartnerOpen(false)} />
       </View>
     );
   }
@@ -195,8 +218,8 @@ export default function DriverJob() {
             <Phone color={C.ink} size={18} />
           </Pressable>
         </View>
-        <Text style={{ marginTop: 8, color: C.steel, fontFamily: font.body, fontSize: 13 }}>Sharing your location with the customer during this job</Text>
-        {row.status === "at_dropoff" ? (
+        {viewerIsPartner ? null : <Text style={{ marginTop: 8, color: C.steel, fontFamily: font.body, fontSize: 13 }}>Sharing your location with the customer during this job</Text>}
+        {row.status === "at_dropoff" && !viewerIsPartner ? (
           <View style={{ marginTop: 12 }}>
             <Text style={{ fontFamily: font.body, fontSize: 15, marginBottom: 8 }}>Take a photo of the item where you left it. The customer sees this photo.</Text>
             {demoMode ? (
@@ -208,6 +231,12 @@ export default function DriverJob() {
           </View>
         ) : null}
         {error ? <Text style={{ color: C.red, marginTop: 8, fontFamily: font.body }}>{error}</Text> : null}
+        {viewerIsPartner ? (
+          <View style={{ marginTop: 16 }}>
+            <Text style={{ fontFamily: font.body, fontSize: 16, marginBottom: 12 }}>You're the second person on this job.</Text>
+            <OutlineButton label="Open in Maps" onPress={openMaps} />
+          </View>
+        ) : (
         <View style={{ flexDirection: "row", gap: 8, marginTop: 16 }}>
           <View style={{ flex: 1 }}>
             <OutlineButton label="Open in Maps" onPress={openMaps} />
@@ -220,6 +249,7 @@ export default function DriverJob() {
             />
           </View>
         </View>
+        )}
       </ScrollView>
     </View>
   );

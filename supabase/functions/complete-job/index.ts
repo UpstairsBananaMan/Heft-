@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { HttpError, json, readJson, serveJson } from "../_shared/http.ts";
 import { notifyJobEvent } from "../_shared/notify.ts";
+import { missingPayouts, payoutsComplete, requiredPayouts } from "../_shared/pricing.ts";
 import { captureHold, createTransfer, stripeConfigured } from "../_shared/stripe.ts";
 import { requireUser } from "../_shared/supabase.ts";
 
@@ -19,21 +20,30 @@ serveJson(async (req) => {
   if (job.status === "paid") return json({ job, payouts: [] });
   if (job.status !== "delivered") throw new HttpError(409, "Mark the job delivered before completing it");
   const leadCents = Number(job.lead_payout_cents ?? job.driver_payout_cents ?? 0);
-  const helperCents = Number(job.helper_payout_cents ?? 0);
   if (job.final_cents == null) throw new HttpError(409, "Job is missing a final price");
 
   const { count } = await admin.from("job_photos").select("id", { count: "exact", head: true }).eq("job_id", job.id).eq("kind", "pod");
   if (!count) throw new HttpError(400, "Proof of delivery is required");
   if (!job.stripe_payment_intent_id) throw new HttpError(409, "No payment hold on this job");
 
+  const required = requiredPayouts(job);
   const { data: existing } = await admin.from("payouts").select("*").eq("job_id", job.id);
-  const payouts = existing ?? [];
-  if (payouts.length === 0) {
-    await captureHold(job.stripe_payment_intent_id);
-    payouts.push(await transferOne(admin, job, job.driver_id, leadCents, "lead"));
-    if (job.needs_second_person && job.partner_driver_id && helperCents > 0) {
-      payouts.push(await transferOne(admin, job, job.partner_driver_id, helperCents, "partner"));
+  let payouts = existing ?? [];
+  const missing = missingPayouts(required, payouts);
+  if (payouts.length === 0 && missing.length > 0) await captureHold(job.stripe_payment_intent_id);
+  for (const need of missing) {
+    try {
+      payouts.push(await transferOne(admin, job, need.driverId, need.amountCents, need.role));
+    } catch (err) {
+      const { data: again } = await admin.from("payouts").select("*").eq("job_id", job.id).eq("driver_id", need.driverId).maybeSingle();
+      if (!again) throw err;
+      payouts.push(again);
     }
+  }
+  const { data: fresh } = await admin.from("payouts").select("*").eq("job_id", job.id);
+  payouts = fresh ?? payouts;
+  if (!payoutsComplete(required, payouts)) {
+    throw new HttpError(409, "A payout is still missing. Try again.");
   }
 
   const { data: updated, error: updateError } = await admin

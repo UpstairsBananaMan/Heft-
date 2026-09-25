@@ -1,7 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { HttpError, json, readJson, serveJson } from "../_shared/http.ts";
 import { notifyJobEvent } from "../_shared/notify.ts";
-import { PICKUP_RATES, QuoteError, computeQuote, requiresSecondPerson, type Rates, type SizeTier } from "../_shared/pricing.ts";
+import { QuoteError, computeQuote, requiresSecondPerson, type SizeTier } from "../_shared/pricing.ts";
+import { loadPickupRates } from "../_shared/rates.ts";
 import { cancelHold, createHold } from "../_shared/stripe.ts";
 import { requireUser } from "../_shared/supabase.ts";
 
@@ -27,7 +28,7 @@ serveJson(async (req) => {
   }
   if (job.status !== "priced") throw new HttpError(409, "Quote the job before publishing");
 
-  const rates = await activeRates(admin);
+  const rates = await loadPickupRates(admin);
   const tier = String(job.size_tier ?? job.size_category ?? "") as SizeTier;
   const pickupFlights = Number(job.stairs_pickup_flights ?? 0);
   const dropoffFlights = Number(job.stairs_dropoff_flights ?? 0);
@@ -111,8 +112,3 @@ serveJson(async (req) => {
   });
 });
 
-async function activeRates(admin: { from: (table: string) => any }): Promise<Rates> {
-  const { data } = await admin.from("rate_cards").select("rates_version").eq("active", true).eq("vehicle_type", "pickup").limit(1).maybeSingle();
-  if (!data?.rates_version) return PICKUP_RATES;
-  return { ...PICKUP_RATES, ratesVersion: data.rates_version };
-}

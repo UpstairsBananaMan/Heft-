@@ -10,6 +10,8 @@ export type TripEnd = {
   zip?: string | null;
 };
 
+export type DemoDistanceSource = "demo" | "estimated";
+
 export type DemoTrip =
   | {
       ok: true;
@@ -18,25 +20,34 @@ export type DemoTrip =
       dropoffZip: string;
       pickupInZone: boolean;
       dropoffInZone: boolean;
-      distanceSource: "maps";
+      distanceSource: DemoDistanceSource;
+      distanceLabel: string;
     }
   | { ok: false; error: "NO_ZIP" | "OUTSIDE_SERVICE_AREA" | "TOO_FAR" };
 
-const MOBILE = { lat: 30.6954, lng: -88.0399 };
+const FIXED_MILES: Record<string, number> = {
+  "30.409,-87.217|30.476,-87.208": 10,
+  "30.476,-87.208|30.409,-87.217": 10,
+  "30.409,-87.217|30.695,-88.040": 60,
+  "30.695,-88.040|30.409,-87.217": 60,
+  "30.695,-88.040|30.695,-88.040": 8,
+};
 
-function near(a: TripEnd, lat: number, lng: number): boolean {
-  return Math.abs(a.lat - lat) < 0.02 && Math.abs(a.lng - lng) < 0.02;
+function pointKey(end: TripEnd): string {
+  return `${end.lat.toFixed(3)},${end.lng.toFixed(3)}`;
 }
 
-/** Fixed demo road miles. Mobile is 60. Marked maps so the demo quote is bookable. */
-export function demoRoadMiles(pickup: TripEnd, dropoff: TripEnd): number {
-  const pickupMobile = near(pickup, MOBILE.lat, MOBILE.lng);
-  const dropMobile = near(dropoff, MOBILE.lat, MOBILE.lng);
-  if (pickupMobile && dropMobile) return 8;
-  if (pickupMobile || dropMobile) return 60;
+/**
+ * Known demo pairs use fixed road miles and are labeled "demo".
+ * Anything else is the straight-line ×1.3 estimate, labeled estimated.
+ * Demo booking still allows both. Real quotes never call this.
+ */
+export function demoRoadMiles(pickup: TripEnd, dropoff: TripEnd): { miles: number; source: DemoDistanceSource } {
+  const fixed = FIXED_MILES[`${pointKey(pickup)}|${pointKey(dropoff)}`];
+  if (fixed != null) return { miles: fixed, source: "demo" };
   const straight = haversineMiles(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
   const scaled = Math.round(straight * 1.3 * 100) / 100;
-  return Math.max(1, Math.ceil(scaled));
+  return { miles: Math.max(1, Math.ceil(scaled)), source: "estimated" };
 }
 
 export function demoTrip(pickup: TripEnd, dropoff: TripEnd): DemoTrip {
@@ -46,7 +57,16 @@ export function demoTrip(pickup: TripEnd, dropoff: TripEnd): DemoTrip {
   const pickupInZone = zipInZone(pickupZip);
   const dropoffInZone = zipInZone(dropoffZip);
   if (!pickupInZone && !dropoffInZone) return { ok: false, error: "OUTSIDE_SERVICE_AREA" };
-  const roadMiles = demoRoadMiles(pickup, dropoff);
-  if (Math.ceil(Math.round(roadMiles * 100) / 100) > PICKUP_RATES.maxLoadedMiles) return { ok: false, error: "TOO_FAR" };
-  return { ok: true, roadMiles, pickupZip, dropoffZip, pickupInZone, dropoffInZone, distanceSource: "maps" };
+  const road = demoRoadMiles(pickup, dropoff);
+  if (Math.ceil(Math.round(road.miles * 100) / 100) > PICKUP_RATES.maxLoadedMiles) return { ok: false, error: "TOO_FAR" };
+  return {
+    ok: true,
+    roadMiles: road.miles,
+    pickupZip,
+    dropoffZip,
+    pickupInZone,
+    dropoffInZone,
+    distanceSource: road.source,
+    distanceLabel: road.source === "demo" ? "Demo road miles" : "Estimated demo distance. You can still book in this demo.",
+  };
 }

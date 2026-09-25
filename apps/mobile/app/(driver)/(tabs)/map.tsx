@@ -36,7 +36,7 @@ export default function DriverJobs() {
     queryFn: async () => {
       const { data, error } = await supabase.from("driver_partnerships").select("*, partner:users(display_name), lead:users(display_name)").eq("shift_date", today);
       if (error) throw error;
-      return (data ?? []) as { id: string; lead_id: string; partner_id: string; status: string; partner?: { display_name?: string } | null; lead?: { display_name?: string } | null }[];
+      return (data ?? []) as { id: string; lead_id: string; partner_id: string; status: string; shift_date?: string; partner?: { display_name?: string } | null; lead?: { display_name?: string } | null }[];
     },
   });
   const minePartnership = (partnerships.data ?? []).find((row) => row.lead_id === profile?.id && (row.status === "accepted" || row.status === "pending"));
@@ -70,9 +70,12 @@ export default function DriverJobs() {
   const payouts = useQuery({
     queryKey: ["today-pay", profile?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("payouts").select("amount_cents");
+      const { data, error } = await supabase.from("payouts").select("amount_cents, created_at");
       if (error) throw error;
-      return ((data ?? []) as { amount_cents: number }[]).reduce((sum, row) => sum + (row.amount_cents ?? 0), 0);
+      const todayKey = chicagoDate();
+      return ((data ?? []) as { amount_cents: number; created_at?: string }[])
+        .filter((row) => row.created_at && chicagoDate(new Date(row.created_at)) === todayKey)
+        .reduce((sum, row) => sum + (row.amount_cents ?? 0), 0);
     },
   });
   const rows = online ? (jobs.data ?? []) : [];
@@ -82,7 +85,7 @@ export default function DriverJobs() {
     lng: job.pickup_lng,
     title: "",
     kind: "payout",
-    payout: formatUsd(job.driver_payout_cents),
+    payout: formatUsd(job.lead_payout_cents ?? job.driver_payout_cents),
     hot: index === 0,
   }));
   pins.push({ id: "me", lat: PENSACOLA_CENTER.lat, lng: PENSACOLA_CENTER.lng, title: "", kind: "driver" });
@@ -130,17 +133,24 @@ export default function DriverJobs() {
             </View>
           )}
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel={partnerLabel} onPress={() => setPartnerOpen(true)} style={{ position: "absolute", top: 104, left: 16, backgroundColor: C.white, borderRadius: 999, paddingHorizontal: 14, minHeight: 44, justifyContent: "center" }}>
-          <Text style={{ fontFamily: font.semi, fontSize: 15 }}>{partnerLabel} ›</Text>
-        </Pressable>
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel={partnerLabel} onPress={() => setPartnerOpen(true)} style={{ alignSelf: "flex-start", backgroundColor: C.white, borderRadius: 999, paddingHorizontal: 14, minHeight: 44, justifyContent: "center", marginBottom: 12 }}>
+          <Text style={{ fontFamily: font.semi, fontSize: 15 }}>{partnerLabel} ›</Text>
+        </Pressable>
+        {(partnerships.data ?? []).filter((row) => row.partner_id === profile?.id && row.status === "pending").map((row) => (
+          <Pressable key={row.id} accessibilityRole="button" onPress={() => router.push(`/invite/${row.id}`)} style={{ backgroundColor: C.white, borderRadius: 18, padding: 16, marginBottom: 12 }}>
+            <Text style={{ fontFamily: font.semi, fontSize: 16 }}>{firstName(row.lead?.display_name)} added you as their partner today.</Text>
+            <Text style={{ fontFamily: font.body, fontSize: 15, color: C.steel, marginTop: 4 }}>Your share is paid to you directly.</Text>
+            <Text style={{ fontFamily: font.semi, fontSize: 15, marginTop: 8 }}>Accept or not today</Text>
+          </Pressable>
+        ))}
         {active?.partner_lost_at ? (
           <View style={{ backgroundColor: C.white, borderRadius: 18, padding: 16, marginBottom: 12 }}>
             <Text style={{ fontFamily: font.semi, fontSize: 16 }}>{backoutCopy(active.partner_lost_at)}</Text>
             <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
               <View style={{ flex: 1 }}><PrimaryButton label="Pick partner" onPress={() => setPartnerOpen(true)} /></View>
-              <View style={{ flex: 1 }}><OutlineButton label="Release job" onPress={() => void invoke("release-job", {}).then(() => queryClient.invalidateQueries())} /></View>
+              <View style={{ flex: 1 }}><OutlineButton label="Release job" onPress={() => void supabase.rpc("release_partner_job").then(() => queryClient.invalidateQueries())} /></View>
             </View>
           </View>
         ) : null}
@@ -148,7 +158,7 @@ export default function DriverJobs() {
           <View style={{ backgroundColor: C.white, borderRadius: 18, padding: 16 }}>
             <Text style={{ fontFamily: font.semi, fontSize: 18 }}>You're partnered with {firstName(asPartner.lead?.display_name)} today</Text>
             <View style={{ marginTop: 12 }}>
-              <OutlineButton label="End" onPress={() => void invoke("end_partnership", {}).then(() => queryClient.invalidateQueries())} />
+              <OutlineButton label="End" onPress={() => void supabase.rpc("end_partnership").then(() => queryClient.invalidateQueries())} />
             </View>
           </View>
         ) : null}

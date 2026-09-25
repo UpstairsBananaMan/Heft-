@@ -9,6 +9,7 @@ export * from "./pricing/zone";
 export * from "./pricing/secondPerson";
 export * from "./pricing/demoTrip";
 export * from "./pricing/clock";
+export * from "./pricing/serverRules";
 export * from "./geo";
 export * from "./status";
 export * from "./places";

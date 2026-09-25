@@ -11,7 +11,8 @@ export type TripQuote = {
   dropoffZip: string;
   pickupInZone: boolean;
   dropoffInZone: boolean;
-  distanceSource: "maps";
+  distanceSource: "maps" | "demo" | "estimated";
+  distanceLabel?: string;
 };
 
 type BookingState = {
@@ -37,6 +38,8 @@ type BookingState = {
   totalCents: number | null;
   miles: number | null;
   trip: TripQuote | null;
+  distanceSource: TripQuote["distanceSource"] | null;
+  distanceLabel: string | null;
   setPickup: (place: PlacePreset | null) => void;
   setDropoff: (place: PlacePreset | null) => void;
   swap: () => void;
@@ -67,13 +70,26 @@ const empty = {
   totalCents: null,
   miles: null,
   trip: null as TripQuote | null,
+  distanceSource: null,
+  distanceLabel: null,
 };
 
 export const useBooking = create<BookingState>((set) => ({
   ...empty,
-  setPickup: (pickup) => set({ pickup, trip: null, lines: null, totalCents: null }),
-  setDropoff: (dropoff) => set({ dropoff, trip: null, lines: null, totalCents: null }),
-  swap: () => set((state) => ({ pickup: state.dropoff, dropoff: state.pickup, trip: null, lines: null, totalCents: null })),
+  setPickup: (pickup) => set({ pickup, trip: null, lines: null, totalCents: null, miles: null, jobId: null, distanceSource: null, distanceLabel: null }),
+  setDropoff: (dropoff) => set({ dropoff, trip: null, lines: null, totalCents: null, miles: null, jobId: null, distanceSource: null, distanceLabel: null }),
+  swap: () =>
+    set((state) => ({
+      pickup: state.dropoff,
+      dropoff: state.pickup,
+      trip: null,
+      lines: null,
+      totalCents: null,
+      miles: null,
+      jobId: null,
+      distanceSource: null,
+      distanceLabel: null,
+    })),
   patch: (partial) => set(partial),
   reset: () => set(empty),
 }));

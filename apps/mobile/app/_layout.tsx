@@ -50,7 +50,11 @@ export default function RootLayout() {
     let opened: { remove: () => void } | undefined;
     try {
       opened = Notifications.addNotificationResponseReceivedListener((response) => {
-        const data = response.notification.request.content.data as { job_id?: string };
+        const data = response.notification.request.content.data as { job_id?: string; partnership_id?: string };
+        if (data?.partnership_id) {
+          router.push(`/invite/${data.partnership_id}`);
+          return;
+        }
         const jobId = data?.job_id;
         if (!jobId) return;
         const role = useSession.getState().profile?.role;

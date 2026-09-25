@@ -4,7 +4,12 @@ function form(params: Record<string, string>): string {
   return new URLSearchParams(params).toString();
 }
 
-async function stripeFetch(path: string, params: Record<string, string>, method = "POST"): Promise<Record<string, unknown>> {
+async function stripeFetch(
+  path: string,
+  params: Record<string, string>,
+  method = "POST",
+  idempotencyKey?: string,
+): Promise<Record<string, unknown>> {
   const key = Deno.env.get("STRIPE_SECRET_KEY");
   if (!key) throw new HttpError(500, "Stripe secret is not configured");
   const res = await fetch(`https://api.stripe.com/v1/${path}`, {
@@ -12,6 +17,7 @@ async function stripeFetch(path: string, params: Record<string, string>, method 
     headers: {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/x-www-form-urlencoded",
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body: method === "GET" ? undefined : form(params),
   });
@@ -59,12 +65,17 @@ export async function createTransfer(
   destination: string,
   jobId: string,
 ): Promise<string> {
-  const transfer = await stripeFetch("transfers", {
-    amount: String(amountCents),
-    currency: "usd",
-    destination,
-    "metadata[job_id]": jobId,
-  });
+  const transfer = await stripeFetch(
+    "transfers",
+    {
+      amount: String(amountCents),
+      currency: "usd",
+      destination,
+      "metadata[job_id]": jobId,
+    },
+    "POST",
+    jobId,
+  );
   const id = transfer.id;
   if (typeof id !== "string") throw new HttpError(502, "Stripe did not return a transfer");
   return id;

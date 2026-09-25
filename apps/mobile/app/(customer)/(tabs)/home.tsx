@@ -634,17 +634,8 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
           vehicle_required: vehicle,
           stairs_pickup_flights: booking.stairsPickupFlights,
           stairs_dropoff_flights: booking.stairsDropoffFlights,
-          needs_second_person: requiresSecondPerson({
-            itemType: booking.itemType,
-            size: booking.size,
-            weightBand: booking.weightBand,
-            pickupFlights: booking.stairsPickupFlights,
-            dropoffFlights: booking.stairsDropoffFlights,
-          }) || booking.needsSecondPerson,
           weight_band: booking.weightBand,
           size_tier: booking.size,
-          pickup_zip: booking.pickup.zip ?? booking.trip?.pickupZip ?? null,
-          dropoff_zip: booking.dropoff.zip ?? booking.trip?.dropoffZip ?? null,
           dropoff_placement: booking.dropoffPlacement,
         };
         let id = booking.jobId;
@@ -657,9 +648,15 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
           const { error: updateError } = await supabase.from("jobs").update(payload).eq("id", id);
           if (updateError) throw updateError;
         }
-        const quoted = await invoke<{ lines: QuoteLine[]; total_cents: number; distance_miles: number }>("quote", { job_id: id });
+        const quoted = await invoke<{ lines: QuoteLine[]; total_cents: number; distance_miles: number; distance_source?: "maps" | "demo" | "estimated"; distance_label?: string }>("quote", { job_id: id });
         if (cancel) return;
-        booking.patch({ lines: quoted.lines, totalCents: quoted.total_cents, miles: quoted.distance_miles });
+        booking.patch({
+          lines: quoted.lines,
+          totalCents: quoted.total_cents,
+          miles: quoted.distance_miles,
+          distanceSource: quoted.distance_source ?? booking.trip?.distanceSource ?? null,
+          distanceLabel: quoted.distance_label ?? booking.trip?.distanceLabel ?? null,
+        });
       } catch (err) {
         if (!cancel) setError(errorText(err));
       } finally {
@@ -707,8 +704,14 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
         setUpdated(true);
         setBookHold(true);
         haptic.warning();
-        const quoted = await invoke<{ lines: QuoteLine[]; total_cents: number; distance_miles: number }>("quote", { job_id: booking.jobId });
-        booking.patch({ lines: quoted.lines, totalCents: quoted.total_cents, miles: quoted.distance_miles });
+        const quoted = await invoke<{ lines: QuoteLine[]; total_cents: number; distance_miles: number; distance_source?: "maps" | "demo" | "estimated"; distance_label?: string }>("quote", { job_id: booking.jobId });
+        booking.patch({
+          lines: quoted.lines,
+          totalCents: quoted.total_cents,
+          miles: quoted.distance_miles,
+          distanceSource: quoted.distance_source ?? null,
+          distanceLabel: quoted.distance_label ?? null,
+        });
         setError("Your price was updated. Please take a look.");
         setTimeout(() => setUpdated(false), 2000);
         setTimeout(() => setBookHold(false), 600);
@@ -765,6 +768,7 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
           {updated && booking.totalCents ? `Price updated to ${formatUsd(booking.totalCents)}` : "All-in price, set before you book."}
         </Text>
         <Text style={{ color: C.green, fontFamily: font.semi, fontSize: 14 }}>{driversApprovedLabel()}</Text>
+        {booking.distanceLabel ? <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 13, marginTop: 4 }}>{booking.distanceLabel}</Text> : null}
       </View>
       <View pointerEvents={bookOn && !delight.locked ? "auto" : "none"} style={{ opacity: bookOn ? 1 : 0 }}>
         <PrimaryButton label={pending ? "Getting your price…" : `Book for ${formatUsd(booking.totalCents)}`} disabled={pending || !booking.totalCents || delight.locked || bookHold} onPress={() => void book()} />

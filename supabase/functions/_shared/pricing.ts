@@ -14,6 +14,19 @@ export {
 } from "../../../packages/shared/src/pricing/computeQuote.ts";
 export { normalizeZip, SERVICE_ZONE_ZIPS, zipInZone } from "../../../packages/shared/src/pricing/zone.ts";
 export { requiresSecondPerson } from "../../../packages/shared/src/pricing/secondPerson.ts";
+export {
+  ESTIMATED_DISTANCE_ALERT,
+  FARTHER,
+  PIN_DOWN,
+  canReuseMapsDistance,
+  coverageDecision,
+  missingPayouts,
+  payoutsComplete,
+  ratesFromCard,
+  requiredPayouts,
+  twoPersonProgressBlock,
+  zipInListedZone,
+} from "../../../packages/shared/src/pricing/serverRules.ts";
 
 export function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const earth = 3958.8;

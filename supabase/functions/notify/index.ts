@@ -6,6 +6,30 @@ import { jwtRole, requireUser } from "../_shared/supabase.ts";
 serveJson(async (req) => {
   if (req.method !== "POST") return json({ error: "POST required" }, 405);
   const body = await readJson(req);
+  const partnershipId = String(body.partnership_id ?? "");
+  if (partnershipId) {
+    const { admin, user } = await requireUser(req);
+    const { data: row } = await admin.from("driver_partnerships").select("id, lead_id, partner_id").eq("id", partnershipId).maybeSingle();
+    if (!row || row.lead_id !== user.id) throw new HttpError(403, "Not allowed to notify on this invite");
+    const { data: lead } = await admin.from("users").select("display_name").eq("id", user.id).maybeSingle();
+    const first = String(lead?.display_name ?? "A driver").split(" ")[0];
+    const { data: tokens } = await admin.from("device_tokens").select("token").eq("user_id", row.partner_id);
+    const messages = (tokens ?? []).map((tokenRow: { token: string }) => ({
+      to: tokenRow.token,
+      title: "Heft",
+      body: `${first} added you as their partner today. Your share is paid to you directly.`,
+      data: { partnership_id: row.id, event: "partner_invite" },
+      sound: "default",
+      categoryId: "partner-invite",
+    }));
+    if (messages.length === 0) return json({ sent: 0 });
+    const res = await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(messages),
+    });
+    return json({ sent: res.ok ? messages.length : 0 });
+  }
   const jobId = String(body.job_id ?? "");
   const event = String(body.event ?? "");
   if (!jobId || !event) throw new HttpError(400, "job_id and event are required");

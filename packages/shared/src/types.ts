@@ -111,7 +111,7 @@ export interface Job {
   size_tier?: SizeCategory | null;
   weight_band?: string | null;
   billable_miles?: number | null;
-  distance_source?: "maps" | "estimated" | null;
+  distance_source?: "maps" | "estimated" | "demo" | null;
   est_job_minutes?: number | null;
   rates_version?: string | null;
   quoted_at?: string | null;

@@ -2,6 +2,17 @@ import { PICKUP_RATES, QuoteError, computeQuote, estimateJobMinutes, type SizeTi
 import { demoTrip, type TripEnd } from "../pricing/demoTrip";
 import { requiresSecondPerson } from "../pricing/secondPerson";
 import { chicagoDate, phoneDigits } from "../pricing/clock";
+import {
+  inviteBlock,
+  leadJobInProgress,
+  missingPayouts,
+  payoutsComplete,
+  protectCustomerJobWrite,
+  replacementPartnerPatch,
+  requiredPayouts,
+  respondBlock,
+  twoPersonProgressBlock,
+} from "../pricing/serverRules";
 import { canCancel, nextDriverStatus } from "../status";
 import type { JobStatus, Role } from "../types";
 import { createDemoState } from "./seed";
@@ -214,7 +225,10 @@ export function applyDemo(input: DemoState, request: DemoRequest): { state: Demo
 
   if (request.action === "insert") {
     const incoming = Array.isArray(request.payload) ? request.payload : [request.payload ?? {}];
-    const created = incoming.map((row) => decorateInsert(table, row));
+    const created = incoming.map((row) => {
+      const clean = table === "jobs" && actor?.role === "customer" ? protectCustomerJobWrite(null, row) : row;
+      return decorateInsert(table, clean);
+    });
     if (table === "disputes") {
       for (const row of created) openDispute(state, row);
     }
@@ -231,7 +245,8 @@ export function applyDemo(input: DemoState, request: DemoRequest): { state: Demo
     state[table] = rowsOf(state, table).map((row) => {
       if (!matches(row, filters)) return row;
       changed += 1;
-      return { ...row, ...patch, updated_at: new Date().toISOString() };
+      const nextPatch = table === "jobs" && actor?.role === "customer" ? protectCustomerJobWrite(row, patch) : patch;
+      return { ...row, ...nextPatch, updated_at: new Date().toISOString() };
     });
     if (changed === 0 && request.single) return fail(state, "No row");
     return ok(state, null);
@@ -344,7 +359,9 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
   if (request.name === "respond_partner") return respondPartner(state, actor.id, String(body.p_id ?? body.partnership_id ?? ""), body.p_accept !== false && body.accept !== false);
   if (request.name === "end_partnership") return endPartnership(state, actor.id);
   if (request.name === "simulate-partner-backout") return simulateBackout(state, actor.id);
-  if (request.name === "skip-partner-deadline" || request.name === "release-job") return releasePartnerWindow(state, actor.id);
+  if (request.name === "skip-partner-deadline" || request.name === "release-job" || request.name === "release_partner_job") {
+    return releasePartnerWindow(state, actor.id);
+  }
 
   if (!job) return fail(state, "Job not found");
 
@@ -355,11 +372,9 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
       pickup_lat: job.pickup_lat,
       pickup_lng: job.pickup_lng,
       pickup_address: job.pickup_address,
-      pickup_zip: job.pickup_zip,
       dropoff_lat: job.dropoff_lat,
       dropoff_lng: job.dropoff_lng,
       dropoff_address: job.dropoff_address,
-      dropoff_zip: job.dropoff_zip,
     });
     if (!trip.ok) return fail(state, coverageMessage(trip.error));
     const tier = String(job.size_tier ?? job.size_category ?? "medium") as SizeTier;
@@ -406,7 +421,11 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
       needs_second_person: second,
       distance_miles: trip.roadMiles,
       billable_miles: quote.billableMiles,
-      distance_source: "maps",
+      distance_source: trip.distanceSource,
+      quoted_pickup_lat: job.pickup_lat,
+      quoted_pickup_lng: job.pickup_lng,
+      quoted_dropoff_lat: job.dropoff_lat,
+      quoted_dropoff_lng: job.dropoff_lng,
       pickup_zip: trip.pickupZip,
       dropoff_zip: trip.dropoffZip,
       pickup_in_zone: trip.pickupInZone,
@@ -437,7 +456,8 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
       total_cents: quote.totalCents,
       lines: quote.lines,
       distance_miles: trip.roadMiles,
-      distance_source: "maps",
+      distance_source: trip.distanceSource,
+      distance_label: trip.distanceLabel,
       platform_fee_cents: quote.platformFeeCents,
       driver_payout_cents: quote.leadDriverKeepsCents,
       lead_payout_cents: quote.leadDriverKeepsCents,
@@ -500,6 +520,8 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
 
   if (request.name === "update-job-status") {
     const next = String(body.status ?? "");
+    const partnerBlock = twoPersonProgressBlock(job, next);
+    if (partnerBlock) return fail(state, partnerBlock);
     if (!canMove(String(job.status), next, actor.role)) return fail(state, `Cannot move from ${job.status} to ${next}`);
     if (next === "cancelled" && String(body.cancel_reason ?? "").trim().length < 3) return fail(state, "A cancel reason is required");
     if (next === "delivered") {
@@ -530,37 +552,43 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
     if (job.status !== "delivered") return fail(state, "Mark the job delivered first");
     const pods = state.job_photos.filter((photo) => photo.job_id === job.id && photo.kind === "pod").length;
     if (pods < 1) return fail(state, "Upload proof of delivery before completing");
-    if (state.payouts.some((payout) => payout.job_id === job.id)) {
-      job.status = "paid";
-      return ok(state, { sandbox: true, job });
-    }
-    job.status = "paid";
-    job.updated_at = new Date().toISOString();
-    const leadCents = Number(job.lead_payout_cents ?? job.driver_payout_cents ?? 0);
-    job.driver_payout_cents = leadCents;
-    state.payouts.push({
-      id: id(),
-      job_id: job.id,
-      driver_id: job.driver_id,
-      amount_cents: leadCents,
-      role: "lead",
-      status: "pending",
-      stripe_transfer_id: `tr_sandbox_${id()}`,
-      created_at: job.updated_at,
+    const required = requiredPayouts({
+      driver_id: job.driver_id ? String(job.driver_id) : null,
+      partner_driver_id: job.partner_driver_id ? String(job.partner_driver_id) : null,
+      needs_second_person: job.needs_second_person === true,
+      lead_payout_cents: Number(job.lead_payout_cents ?? job.driver_payout_cents ?? 0),
+      helper_payout_cents: Number(job.helper_payout_cents ?? 0),
     });
-    const helperCents = Number(job.helper_payout_cents ?? 0);
-    if (job.needs_second_person === true && job.partner_driver_id && helperCents > 0) {
+    const existing = state.payouts.filter((payout) => payout.job_id === job.id);
+    const missing = missingPayouts(
+      required,
+      existing.map((row) => ({ driver_id: row.driver_id ? String(row.driver_id) : null, role: row.role ? String(row.role) : null })),
+    );
+    const nowPaid = new Date().toISOString();
+    for (const need of missing) {
       state.payouts.push({
         id: id(),
         job_id: job.id,
-        driver_id: job.partner_driver_id,
-        amount_cents: helperCents,
-        role: "partner",
+        driver_id: need.driverId,
+        amount_cents: need.amountCents,
+        role: need.role,
         status: "pending",
         stripe_transfer_id: `tr_sandbox_${id()}`,
-        created_at: job.updated_at,
+        created_at: nowPaid,
       });
     }
+    const after = state.payouts.filter((payout) => payout.job_id === job.id);
+    if (
+      !payoutsComplete(
+        required,
+        after.map((row) => ({ driver_id: row.driver_id ? String(row.driver_id) : null, role: row.role ? String(row.role) : null })),
+      )
+    ) {
+      return fail(state, "A payout is still missing. Try again.");
+    }
+    job.status = "paid";
+    job.updated_at = nowPaid;
+    job.driver_payout_cents = Number(job.lead_payout_cents ?? job.driver_payout_cents ?? 0);
     state.job_events.push({
       id: id(),
       job_id: job.id,
@@ -597,13 +625,13 @@ function coverTrip(body: Record<string, unknown>) {
     lat: Number(body.pickup_lat),
     lng: Number(body.pickup_lng),
     address: String(body.pickup_address ?? ""),
-    zip: (body.pickup_zip as string | null) || inferZip(Number(body.pickup_lat), Number(body.pickup_lng), String(body.pickup_address ?? "")),
+    zip: inferZip(Number(body.pickup_lat), Number(body.pickup_lng), String(body.pickup_address ?? "")),
   };
   const dropoff: TripEnd = {
     lat: Number(body.dropoff_lat),
     lng: Number(body.dropoff_lng),
     address: String(body.dropoff_address ?? ""),
-    zip: (body.dropoff_zip as string | null) || inferZip(Number(body.dropoff_lat), Number(body.dropoff_lng), String(body.dropoff_address ?? "")),
+    zip: inferZip(Number(body.dropoff_lat), Number(body.dropoff_lng), String(body.dropoff_address ?? "")),
   };
   return demoTrip(pickup, dropoff);
 }
@@ -611,7 +639,7 @@ function coverTrip(body: Record<string, unknown>) {
 function publishRefusal(job: DemoRow): string | null {
   const quotedAt = job.quoted_at ? new Date(String(job.quoted_at)).getTime() : 0;
   if (!quotedAt || Date.now() - quotedAt > 60 * 60 * 1000) return UPDATED;
-  if (job.distance_source !== "maps") return UPDATED;
+  if (job.distance_source !== "maps" && job.distance_source !== "demo" && job.distance_source !== "estimated") return UPDATED;
   if (job.rates_version !== PICKUP_RATES.ratesVersion) return UPDATED;
   const tier = String(job.size_tier ?? job.size_category ?? "medium") as SizeTier;
   try {
@@ -635,6 +663,12 @@ function publishRefusal(job: DemoRow): string | null {
 }
 
 function invitePartner(state: DemoState, leadId: string, phone: string) {
+  const leadProfile = state.driver_profiles.find((row) => row.user_id === leadId);
+  const blocked = inviteBlock(
+    leadProfile ? { status: String(leadProfile.status ?? ""), partner_only: leadProfile.partner_only === true } : null,
+    Boolean(acceptedAsPartner(state, leadId)),
+  );
+  if (blocked) return fail(state, blocked);
   const digits = phoneDigits(phone);
   const person = state.users.find((user) => phoneDigits(String(user.phone ?? "")) === digits);
   if (!person || digits.length < 10) return ok(state, { status: "no_account" });
@@ -674,31 +708,57 @@ function respondPartner(state: DemoState, actorId: string, partnershipId: string
   if (!row) return fail(state, "Invite not found");
   if (row.partner_id !== actorId && row.lead_id !== actorId) return fail(state, "not allowed");
   if (row.status !== "pending") return fail(state, "This invite is no longer open");
+  if (accept) {
+    const inviteeBusy = state.jobs.some((job) => job.driver_id === row.partner_id && leadJobInProgress(String(job.status)));
+    const blocked = respondBlock(inviteeBusy);
+    if (blocked) return fail(state, blocked);
+  }
   row.status = accept ? "accepted" : "declined";
   row.responded_at = new Date().toISOString();
+  if (accept) {
+    const patch = replacementPartnerPatch(String(row.partner_id));
+    for (const job of state.jobs) {
+      if (
+        job.driver_id === row.lead_id &&
+        job.needs_second_person === true &&
+        job.partner_lost_at &&
+        ["assigned", "en_route_pickup"].includes(String(job.status))
+      ) {
+        job.partner_driver_id = patch.partner_driver_id;
+        job.partner_lost_at = patch.partner_lost_at;
+      }
+    }
+  }
   return ok(state, { status: row.status, name: state.users.find((user) => user.id === row.partner_id)?.display_name ?? "Partner" });
 }
 
-function endPartnership(state: DemoState, leadId: string) {
-  const row = activePartnership(state, leadId);
+function todayPartnership(state: DemoState, userId: string) {
+  const today = chicagoDate();
+  return state.driver_partnerships.find(
+    (row) => row.shift_date === today && row.status === "accepted" && (row.lead_id === userId || row.partner_id === userId),
+  );
+}
+
+function endPartnership(state: DemoState, userId: string) {
+  const row = todayPartnership(state, userId);
   if (!row) return ok(state, { status: "none" });
   const busy = state.jobs.some(
     (job) =>
-      job.driver_id === leadId &&
+      job.driver_id === row.lead_id &&
       job.needs_second_person === true &&
       job.partner_driver_id === row.partner_id &&
       ["at_pickup", "en_route_dropoff", "at_dropoff", "delivered"].includes(String(job.status)),
   );
   if (busy) return fail(state, "Finish your current 2-person job first.");
   for (const job of state.jobs) {
-    if (job.driver_id === leadId && job.needs_second_person === true && ["assigned", "en_route_pickup"].includes(String(job.status))) {
+    if (job.driver_id === row.lead_id && job.needs_second_person === true && ["assigned", "en_route_pickup"].includes(String(job.status))) {
       job.partner_lost_at = new Date().toISOString();
       job.partner_driver_id = null;
     }
   }
   row.status = "ended";
   row.ended_at = new Date().toISOString();
-  row.ended_by = leadId;
+  row.ended_by = userId;
   return ok(state, { status: "ended" });
 }
 

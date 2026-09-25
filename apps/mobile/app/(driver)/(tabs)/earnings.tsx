@@ -45,7 +45,7 @@ export default function Earnings() {
     <ScrollView style={{ flex: 1, backgroundColor: C.paper }} contentContainerStyle={{ padding: 20, paddingTop: 64 }}>
       <Text style={{ color: C.steel, fontFamily: font.medium, fontSize: 14 }}>This week</Text>
       <Text style={{ fontFamily: font.display, fontSize: 44, color: C.ink }}>{formatUsd(total)}</Text>
-      <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 16, marginBottom: 16 }}>{rows.length} jobs</Text>
+      <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 16, marginBottom: 16 }}>{rows.length === 1 ? "1 job" : `${rows.length} jobs`}</Text>
       {setupComplete ? null : (
         <View style={{ backgroundColor: C.white, borderRadius: 18, padding: 16, marginBottom: 16 }}>
           <Text style={{ fontFamily: font.semi, fontSize: 16 }}>Set up payouts to get paid</Text>

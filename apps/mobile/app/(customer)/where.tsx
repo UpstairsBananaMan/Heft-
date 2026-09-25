@@ -38,7 +38,11 @@ export default function WhereScreen() {
         dropoff_address: state.dropoff.address,
         dropoff_zip: state.dropoff.zip ?? null,
       });
-      booking.patch({ trip: covered });
+      booking.patch({
+        trip: covered,
+        distanceSource: covered.distanceSource,
+        distanceLabel: covered.distanceLabel ?? (covered.distanceSource === "estimated" ? "Estimated demo distance. You can still book in this demo." : covered.distanceSource === "demo" ? "Demo road miles" : null),
+      });
       const step = state.skipAfterAddress === "price" && state.size ? "price" : state.presetItem ? "size" : "item";
       booking.patch({ step });
       if (router.canGoBack()) router.back();
