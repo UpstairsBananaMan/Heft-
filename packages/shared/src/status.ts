@@ -52,6 +52,7 @@ export const SIZE_LABEL: Record<string, string> = {
   medium: "Medium",
   large: "Large",
   xl: "Extra large",
+  truckload: "Truckload",
 };
 
 /** Driver-operated forward steps. delivered → paid is complete-job, not this map. */

@@ -28,7 +28,7 @@ describe("demo backend", () => {
       action: "select",
       actor: customer,
     });
-    assert.equal((mine.data as unknown[]).length, 6);
+    assert.equal((mine.data as unknown[]).length, 10);
     const open = demo.apply({
       kind: "query",
       table: "jobs",
@@ -119,10 +119,10 @@ describe("demo backend", () => {
       head: true,
       actor: admin,
     });
-    assert.equal(paid.count, 2);
+    assert.equal(paid.count, 3);
   });
 
-  it("rejects a stop outside Pensacola", () => {
+  it("quotes a one-end trip to Mobile and refuses both ends outside", () => {
     const demo = run();
     const inserted = demo.apply({
       kind: "query",
@@ -133,20 +133,59 @@ describe("demo backend", () => {
       payload: {
         customer_id: DEMO_IDS.customer,
         status: "draft",
-        pickup_address: "Mobile",
-        pickup_lat: 30.6954,
-        pickup_lng: -88.0399,
-        dropoff_address: "Pensacola",
-        dropoff_lat: 30.4088,
-        dropoff_lng: -87.2166,
-        item_description: "Too far",
-        size_category: "small",
+        pickup_address: "21 E Government St, Pensacola, FL",
+        pickup_lat: 30.4088,
+        pickup_lng: -87.2166,
+        dropoff_address: "150 Government St, Mobile, AL",
+        dropoff_lat: 30.6954,
+        dropoff_lng: -88.0399,
+        item_description: "Couch to Mobile",
+        size_category: "medium",
         vehicle_required: "pickup",
       },
     });
     const jobId = (inserted.data as { id: string }).id;
     const quoted = demo.apply({ kind: "invoke", name: "quote", body: { job_id: jobId }, actor: customer });
-    assert.equal(quoted.error?.message, "Not in service area yet");
+    assert.equal(quoted.error, null);
+    const lines = (quoted.data as { lines: { code: string }[] }).lines;
+    assert.ok(lines.some((line) => line.code === "out_of_town"));
+    const both = demo.apply({
+      kind: "invoke",
+      name: "coverage",
+      actor: customer,
+      body: {
+        pickup_lat: 30.6954,
+        pickup_lng: -88.0399,
+        pickup_address: "150 Government St, Mobile, AL",
+        dropoff_lat: 30.6035,
+        dropoff_lng: -87.9036,
+        dropoff_address: "100 Main St, Daphne, AL",
+      },
+    });
+    assert.match(both.error?.message ?? "", /farther than we go/);
+  });
+
+  it("refuses a 2-person accept until a partner accepts, then pays both", () => {
+    const demo = run();
+    const blocked = demo.apply({ kind: "invoke", name: "accept-job", body: { job_id: DEMO_IDS.fridgeOpen }, actor: driver });
+    assert.match(blocked.error?.message ?? "", /partner/i);
+    const invited = demo.apply({ kind: "invoke", name: "invite_partner", body: { phone: "8505550199" }, actor: driver });
+    assert.equal((invited.data as { status: string }).status, "invited");
+    const partnershipId = (invited.data as { partnership_id: string }).partnership_id;
+    demo.apply({ kind: "invoke", name: "respond_partner", body: { partnership_id: partnershipId, accept: true }, actor: driver });
+    const accepted = demo.apply({ kind: "invoke", name: "accept-job", body: { job_id: DEMO_IDS.fridgeOpen }, actor: driver });
+    assert.equal(accepted.error, null);
+    assert.equal((accepted.data as { job: { partner_driver_id: string } }).job.partner_driver_id, DEMO_IDS.partner);
+  });
+
+  it("returns a calm result for each partner phone", () => {
+    const demo = run();
+    const missing = demo.apply({ kind: "invoke", name: "invite_partner", body: { phone: "8505550000" }, actor: driver });
+    assert.equal((missing.data as { status: string }).status, "no_account");
+    const pending = demo.apply({ kind: "invoke", name: "invite_partner", body: { phone: "8505550103" }, actor: driver });
+    assert.equal((pending.data as { status: string }).status, "pending_approval");
+    const payouts = demo.apply({ kind: "invoke", name: "invite_partner", body: { phone: "8505550198" }, actor: driver });
+    assert.equal((payouts.data as { status: string }).status, "no_payouts");
   });
 
   it("is awaitable from the query helper", async () => {

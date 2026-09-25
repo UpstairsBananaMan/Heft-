@@ -22,6 +22,9 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: false,
     bundleIdentifier: "com.heft.app",
+    entitlements: {
+      "com.apple.developer.usernotifications.time-sensitive": true,
+    },
     config: mapsKey ? { googleMapsApiKey: mapsKey } : undefined,
     infoPlist: {
       NSCameraUsageDescription: `${APP_NAME} uses the camera for delivery photos.`,

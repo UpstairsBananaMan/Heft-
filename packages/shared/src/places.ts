@@ -7,42 +7,74 @@ export const PENSACOLA_PLACES: PlacePreset[] = [
     address: "21 E Government St, Pensacola, FL",
     lat: 30.4088,
     lng: -87.2166,
+    zip: "32502",
   },
   {
     label: "Cordova Mall",
     address: "5100 N 9th Ave, Pensacola, FL",
     lat: 30.4758,
     lng: -87.208,
+    zip: "32503",
   },
   {
     label: "Pensacola Airport",
     address: "2430 Airport Blvd, Pensacola, FL",
     lat: 30.4733,
     lng: -87.1867,
+    zip: "32504",
   },
   {
     label: "East Hill",
     address: "1200 E Gadsden St, Pensacola, FL",
     lat: 30.436,
     lng: -87.191,
+    zip: "32503",
   },
   {
     label: "Myrtle Grove",
     address: "4100 W Fairfield Dr, Pensacola, FL",
     lat: 30.421,
     lng: -87.283,
+    zip: "32506",
   },
   {
     label: "North Hill",
     address: "412 N Spring St, Pensacola, FL",
     lat: 30.4165,
     lng: -87.221,
+    zip: "32501",
   },
   {
     label: "Work",
     address: "7171 N Davis Hwy, Pensacola, FL",
     lat: 30.498,
     lng: -87.208,
+    zip: "32514",
+  },
+];
+
+/** Demo-only ends. Real builds never search this list. */
+export const DEMO_PLACES: PlacePreset[] = [
+  {
+    label: "Mobile",
+    address: "150 Government St, Mobile, AL",
+    lat: 30.6954,
+    lng: -88.0399,
+    zip: "36602",
+  },
+  {
+    label: "Daphne",
+    address: "100 Main St, Daphne, AL",
+    lat: 30.6035,
+    lng: -87.9036,
+    zip: "36526",
+  },
+  {
+    label: "Unpinned lot",
+    address: "Lot without a street number",
+    lat: 30.42,
+    lng: -87.22,
+    zip: null,
   },
 ];
 
@@ -52,6 +84,7 @@ export const HARDWARE_SUGGESTION: PlacePreset = {
   address: "500 E Nine Mile Rd, Pensacola, FL",
   lat: 30.52,
   lng: -87.22,
+  zip: "32514",
 };
 
 /** Local Pensacola matches. Google Places is used when a maps key is set. */

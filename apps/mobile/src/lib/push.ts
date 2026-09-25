@@ -37,6 +37,14 @@ export async function registerForJobAlerts(userId: string): Promise<{ ok: true }
   if (Platform.OS !== "ios" && Platform.OS !== "android") {
     return { ok: false, message: "Job alerts are for the iPhone and Android apps." };
   }
+  try {
+    await Notifications.setNotificationCategoryAsync("partner-invite", [
+      { identifier: "accept", buttonTitle: "Accept", options: { opensAppToForeground: true } },
+      { identifier: "not-today", buttonTitle: "Not today" },
+    ]);
+  } catch {
+    // Action buttons are optional. A normal push still delivers the invite.
+  }
   if (!Device.isDevice) {
     return { ok: false, message: "Use a physical phone for job alerts. A simulator usually cannot get a push token." };
   }

@@ -2,59 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { eventLabel, loadFailureCopy } from "./copy";
 import { haversineMiles, inPensacola, roundMiles, serviceAreaHint, vehicleCovers } from "./geo";
-import { quoteCents, quoteLines, splitCents } from "./pricing";
 import { canCancel, canOpenDispute, cancelHint, disputeBlockedReason, nextDriverStatus } from "./status";
 import { isValidEmail, isValidPhone, publicSignupRole } from "./signup";
 import { toCsv } from "./csv";
-import type { VehicleType } from "./types";
-
-function rule(
-  vehicle_type: VehicleType,
-  base_cents: number,
-  per_mile_cents: number,
-  min_cents: number,
-  size_multiplier: number,
-) {
-  return { vehicle_type, base_cents, per_mile_cents, min_cents, size_multiplier };
-}
-
-describe("quote formula", () => {
-  it("applies the pickup minimum at zero miles", () => {
-    assert.equal(quoteCents(rule("pickup", 4500, 250, 5500, 1), 0), 5500);
-  });
-
-  it("uses base plus per-mile once that exceeds the minimum", () => {
-    assert.equal(quoteCents(rule("pickup", 4500, 250, 5500, 1), 10), 7000);
-  });
-
-  it("multiplies by the size factor after the minimum check", () => {
-    assert.equal(quoteCents(rule("pickup", 4500, 250, 5500, 1.15), 10), 8050);
-    assert.equal(quoteCents(rule("pickup", 4500, 250, 5500, 1.6), 0), 8800);
-  });
-
-  it("keeps the box-truck minimum before the large multiplier", () => {
-    assert.equal(quoteCents(rule("box_truck", 8500, 400, 11000, 1.35), 5), 14850);
-  });
-
-  it("itemizes stairs and helper without charging for placement", () => {
-    const rule = { vehicle_type: "pickup" as const, base_cents: 4500, per_mile_cents: 250, min_cents: 5500, size_multiplier: 1.15 };
-    const plain = quoteLines(rule, 10, { vehicleLabel: "Pickup truck", sizeLabel: "Medium" });
-    const withAddons = quoteLines(rule, 10, { stairs: true, helper: true, vehicleLabel: "Pickup truck", sizeLabel: "Medium" });
-    assert.equal(plain.lines.reduce((sum, line) => sum + line.cents, 0), plain.total_cents);
-    assert.equal(withAddons.total_cents, plain.total_cents + 1500 + 2000);
-    assert.equal(withAddons.lines.some((line) => line.key === "stairs"), true);
-    assert.equal(plain.lines.some((line) => line.key === "helper"), false);
-  });
-
-  it("splits 15 percent to the platform in integer cents", () => {
-    assert.deepEqual(splitCents(7000), {
-      platform_fee_cents: 1050,
-      driver_payout_cents: 5950,
-    });
-    assert.equal(splitCents(7000).platform_fee_cents + splitCents(7000).driver_payout_cents, 7000);
-  });
-});
-
 describe("service area and distance", () => {
   it("names the Pensacola box when a point is outside", () => {
     assert.equal(inPensacola(30.4213, -87.2169), true);

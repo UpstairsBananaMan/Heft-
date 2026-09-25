@@ -1,0 +1,19 @@
+case,sizeTier,roadMiles,distanceSource,pickupInZone,dropoffInZone,pickupFlights,dropoffFlights,secondPerson,estJobMinutes,vehicleType,lines,totalCents,platformFeeCents,driverShareCents,helperShareCents,leadDriverKeepsCents,bookable
+"Local: FB Marketplace couch, 10 mi",medium,10,maps,true,true,0,0,false,80,pickup,base:3900; miles:2000; size:2000,7900,1185,6715,0,6715,true
+"Local: Home Depot lumber run, 8 mi",medium,8,maps,true,true,0,0,false,76,pickup,base:3900; miles:1600; size:2000,7500,1125,6375,0,6375,true
+"Local: Queen mattress + box spring, 8 mi",medium,8,maps,true,true,0,0,false,76,pickup,base:3900; miles:1600; size:2000,7500,1125,6375,0,6375,true
+"Local: Fridge delivery/swap, 8 mi, second person",large,8,maps,true,true,0,0,true,86,pickup,base:3900; miles:1600; size:4000; second_person:4500,14000,2100,11900,3825,8075,true
+"Local: Fridge delivery/swap, 8 mi, 2 flights at drop-off, second person",large,8,maps,true,true,0,2,true,96,pickup,base:3900; miles:1600; size:4000; stairs:3000; second_person:5000,17500,2625,14875,4250,10625,true
+"Local: Apartment move-out, 15 mi, 1 flight, second person",truckload,15,maps,true,true,1,0,true,195,pickup,base:3900; miles:3000; size:12000; stairs:1500; second_person:10000,30400,4560,25840,8500,17340,true
+"Local long: Perdido Key to Milton, 45.7 mi",medium,45.7,maps,true,true,0,0,false,135,pickup,base:3900; miles:9200; size:2000,15100,2265,12835,0,12835,true
+"Out of town: Pensacola to Fort Walton Beach, 40 mi",medium,40,maps,true,false,0,0,false,196,pickup,base:3900; miles:8000; size:2000; out_of_town:7000,20900,3135,17765,0,17765,true
+"Out of town: Pensacola to Mobile AL, 60 mi",medium,60,maps,true,false,0,0,false,244,pickup,base:3900; miles:12000; size:2000; out_of_town:10500,28400,4260,24140,0,24140,true
+"Edge: Pensacola to Navarre, 25 mi (just outside zone)",medium,25,maps,true,false,0,0,false,160,pickup,base:3900; miles:5000; size:2000; out_of_town:4375,15275,2291,12984,0,12984,true
+"Edge: Perdido Key to Orange Beach AL, 6.6 mi (short hop out)",medium,6.6,maps,true,false,0,0,false,88,pickup,base:3900; miles:1400; size:2000; out_of_town:1225,8525,1279,7246,0,7246,true
+Minimum fare: small item 3 mi local,small,3,maps,true,true,0,0,false,56,pickup,base:3900; miles:600; minimum:1000,5500,825,4675,0,4675,true
+"Estimated distance (haversine 9.2 x 1.3 = 11.96 -> 12), local, not bookable",medium,11.96,estimated,true,true,0,0,false,84,pickup,base:3900; miles:2400; size:2000,8300,1245,7055,0,7055,false
+Maps miles round up: 10.1 mi local,medium,10.1,maps,true,true,0,0,false,82,pickup,base:3900; miles:2200; size:2000,8100,1215,6885,0,6885,true
+Service max: 70 mi out of town,medium,70,maps,true,false,0,0,false,268,pickup,base:3900; miles:14000; size:2000; out_of_town:12250,32150,4823,27327,0,27327,true
+Truckload forces second person even if secondPerson=false,truckload,5,maps,true,true,0,0,false,170,pickup,base:3900; miles:1000; size:12000; second_person:8500,25400,3810,21590,7225,14365,true
+Out of town + second person: fridge to Navarre 25 mi,large,25,maps,true,false,0,0,true,170,pickup,base:3900; miles:5000; size:4000; out_of_town:4375; second_person:8500,25775,3866,21909,7225,14684,true
+"Local (Molino added): Molino 32577 to downtown Pensacola 32502, Medium, 22 mi",medium,22,maps,true,true,0,0,false,104,pickup,base:3900; miles:4400; size:2000,10300,1545,8755,0,8755,true

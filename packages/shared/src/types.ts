@@ -4,7 +4,7 @@ export type Role = (typeof ROLES)[number];
 export const VEHICLE_TYPES = ["pickup", "cargo_van", "box_truck", "flatbed"] as const;
 export type VehicleType = (typeof VEHICLE_TYPES)[number];
 
-export const SIZE_CATEGORIES = ["small", "medium", "large", "xl"] as const;
+export const SIZE_CATEGORIES = ["small", "medium", "large", "xl", "truckload"] as const;
 export type SizeCategory = (typeof SIZE_CATEGORIES)[number];
 
 export const JOB_STATUSES = [
@@ -64,11 +64,14 @@ export interface CustomerProfile {
 export interface DriverProfile {
   user_id: string;
   status: DriverStatus;
-  vehicle_type: VehicleType;
+  vehicle_type: VehicleType | null;
   capacity_lbs: number | null;
   bed_length_ft: number | string | null;
-  service_lat: number;
-  service_lng: number;
+  service_lat: number | null;
+  service_lng: number | null;
+  partner_only?: boolean;
+  background_check_at?: string | null;
+  background_check_by?: string | null;
   service_radius_miles: number | string;
   plate: string | null;
   vehicle_make: string | null;
@@ -104,7 +107,23 @@ export interface Job {
   vehicle_required: VehicleType;
   stairs_pickup_flights: number;
   stairs_dropoff_flights: number;
-  needs_helper: boolean;
+  needs_second_person: boolean;
+  size_tier?: SizeCategory | null;
+  weight_band?: string | null;
+  billable_miles?: number | null;
+  distance_source?: "maps" | "estimated" | null;
+  est_job_minutes?: number | null;
+  rates_version?: string | null;
+  quoted_at?: string | null;
+  pickup_zip?: string | null;
+  dropoff_zip?: string | null;
+  pickup_in_zone?: boolean | null;
+  dropoff_in_zone?: boolean | null;
+  driver_share_cents?: number | null;
+  lead_payout_cents?: number | null;
+  helper_payout_cents?: number | null;
+  partner_driver_id?: string | null;
+  partner_lost_at?: string | null;
   dropoff_placement: "inside" | "curbside";
   quote_lines: { key: string; label: string; cents: number }[] | null;
   distance_miles: number | string | null;
@@ -183,6 +202,7 @@ export interface Payout {
   amount_cents: number;
   stripe_transfer_id: string | null;
   status: PayoutStatus;
+  role?: "lead" | "partner";
   created_at: string;
 }
 
@@ -197,7 +217,7 @@ export interface DeviceToken {
 export interface QuoteResult {
   estimate_cents: number;
   distance_miles: number;
-  distance_source: "google" | "haversine";
+  distance_source: "maps" | "estimated" | "google" | "haversine";
   platform_fee_cents: number;
   driver_payout_cents: number;
   currency: "usd";
@@ -211,4 +231,5 @@ export interface PlacePreset {
   lat: number;
   lng: number;
   outside?: boolean;
+  zip?: string | null;
 }

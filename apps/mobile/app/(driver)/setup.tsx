@@ -56,7 +56,15 @@ export default function DriverSetup() {
     payouts: Boolean(row?.stripe_connect_account_id),
     area: Boolean(row?.service_zip),
   };
-  const count = Object.values(done).filter(Boolean).length;
+  const partnerOnly = row?.partner_only === true;
+  const partnerDone = [
+    done.license,
+    documents.some((item) => item.kind === "profile_photo" && (item.status === "approved" || item.status === "in_review")),
+    Boolean(profile?.phone),
+    Boolean(row?.background_check_at),
+    done.payouts,
+  ];
+  const count = partnerOnly ? partnerDone.filter(Boolean).length : Object.values(done).filter(Boolean).length;
   const readyToSubmit = done.vehicle && done.vehicle_photo && done.license && done.insurance && done.area;
   const next = STEPS.find((step) => !done[step.id]);
   const approved = row?.status === "approved";
@@ -105,7 +113,7 @@ export default function DriverSetup() {
       </View>
       <View style={{ marginTop: -20, marginHorizontal: 16, backgroundColor: C.white, borderRadius: 18, padding: 16 }}>
         <Text style={{ fontFamily: font.semi, fontSize: 17 }}>{approved ? `Approved, you can go online` : "Not submitted yet"}</Text>
-        <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 14, marginTop: 2 }}>{count} of 6 done</Text>
+        <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 14, marginTop: 2 }}>{count} of {partnerOnly ? 5 : 6} done</Text>
         <View style={{ flexDirection: "row", gap: 6, marginTop: 10 }}>
           {STEPS.map((step, index) => (
             <View key={step.id} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: index < count ? C.green : C.sand200 }} />
@@ -113,8 +121,20 @@ export default function DriverSetup() {
         </View>
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-        {STEPS.map((step) => {
-          const state = done[step.id] ? (docStatus(step.id) === "in_review" ? "In review" : "Done") : "Needed";
+        {(partnerOnly
+          ? [
+              { id: "license", title: "Driver's license", body: "Front of your license", icon: IdCard },
+              { id: "photo", title: "Profile photo", body: "A photo of you", icon: Camera },
+              { id: "phone", title: "Phone", body: "The number on your account", icon: IdCard },
+              { id: "background", title: "Background check done", body: "An admin confirms this", icon: ShieldCheck },
+              { id: "payouts", title: "Payouts", body: "Set up your bank", icon: Landmark },
+            ]
+          : STEPS
+        ).map((step) => {
+          const finished = partnerOnly
+            ? partnerDone[["license", "photo", "phone", "background", "payouts"].indexOf(step.id)]
+            : done[step.id as keyof typeof done];
+          const state = finished ? (docStatus(step.id) === "in_review" ? "In review" : "Done") : "Needed";
           const Icon = step.icon;
           return (
             <Pressable key={step.id} accessibilityLabel={`${step.title}, ${state.toLowerCase()}`} onPress={() => setPanel(step.id)} style={{ backgroundColor: C.white, borderRadius: 18, padding: 14, marginBottom: 10, minHeight: 64, flexDirection: "row", alignItems: "center", gap: 12 }}>

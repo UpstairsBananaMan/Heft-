@@ -3,6 +3,7 @@ import { Alert, Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Trash2 } from "lucide-react-native";
 import { APP_NAME, driverKeepPercent } from "@heft/shared";
+import { PartnerSheet } from "../components/PartnerSheet";
 import { C, font, OutlineButton } from "../components/v2";
 import { demoMode, supabase } from "../lib/supabase";
 import { demoPerson, setDemoRole } from "../lib/demo-client";
@@ -17,6 +18,7 @@ export function AccountScreen() {
   const refreshProfile = useSession((state) => state.refreshProfile);
   const [error, setError] = useState("");
   const [showName, setShowName] = useState(false);
+  const [partnerOpen, setPartnerOpen] = useState(false);
   useEffect(() => {
     if (profile?.role !== "driver" || !profile.id) return;
     void supabase
@@ -46,7 +48,7 @@ export function AccountScreen() {
     ]);
   }
 
-  async function switchRole(role: "customer" | "driver") {
+  async function switchRole(role: "customer" | "driver" | "partner") {
     const person = demoPerson(role);
     setDemoRole(role);
     useSession.setState({ session: { user: { id: person.id, email: person.email } } as Session, profile: null });
@@ -96,14 +98,26 @@ export function AccountScreen() {
           Need something moved? Book with a customer account. Keep {driverKeepPercent()}% of every fare.
         </Text>
       )}
+      {profile?.role === "driver" ? (
+        <View style={{ marginTop: 16 }}>
+          <Row label="Partner today" onPress={() => setPartnerOpen(true)} />
+        </View>
+      ) : null}
       {demoMode ? (
         <View style={{ marginTop: 16, backgroundColor: C.white, borderRadius: 18, padding: 16 }}>
           <Text style={{ fontFamily: font.semi, fontSize: 16, marginBottom: 8 }}>Demo</Text>
           <OutlineButton label="Customer demo" onPress={() => void switchRole("customer")} />
           <View style={{ height: 8 }} />
           <OutlineButton label="Driver demo" onPress={() => void switchRole("driver")} />
+          <View style={{ height: 8 }} />
+          <OutlineButton label="Partner demo" onPress={() => void switchRole("partner")} />
+          <View style={{ height: 8 }} />
+          <OutlineButton label="Simulate partner backing out" onPress={() => void invoke("simulate-partner-backout", {})} />
+          <View style={{ height: 8 }} />
+          <OutlineButton label="Skip to deadline" onPress={() => void invoke("skip-partner-deadline", {})} />
         </View>
       ) : null}
+      <PartnerSheet open={partnerOpen} onClose={() => setPartnerOpen(false)} />
       <View style={{ marginTop: 24 }}>
         <Pressable onPress={() => void signOut().then(() => router.replace("/(auth)/welcome"))} style={{ minHeight: 48, justifyContent: "center" }}>
           <Text style={{ fontFamily: font.semi, fontSize: 16 }}>Sign out</Text>
