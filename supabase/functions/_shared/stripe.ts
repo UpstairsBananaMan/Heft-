@@ -50,6 +50,12 @@ export async function createHold(amountCents: number, jobId: string): Promise<st
   return id;
 }
 
+export async function paymentIntentStatus(paymentIntentId: string): Promise<string> {
+  if (!stripeConfigured() || paymentIntentId.startsWith("pi_sandbox_")) return "requires_capture";
+  const intent = await stripeFetch(`payment_intents/${paymentIntentId}`, {}, "GET");
+  return typeof intent.status === "string" ? intent.status : "";
+}
+
 export async function captureHold(paymentIntentId: string): Promise<void> {
   if (!stripeConfigured() || paymentIntentId.startsWith("pi_sandbox_")) return;
   await stripeFetch(`payment_intents/${paymentIntentId}/capture`, {});

@@ -29,22 +29,24 @@ export default function DriverJobs() {
   const queryClient = useQueryClient();
   const [online, setOnline] = useState(true);
   const [partnerOpen, setPartnerOpen] = useState(false);
+  const [actionNote, setActionNote] = useState("");
   const today = chicagoDate();
   const partnerships = useQuery({
     queryKey: ["partnerships", profile?.id, today],
     enabled: Boolean(profile?.id),
     queryFn: async () => {
-      const { data, error } = await supabase.from("driver_partnerships").select("*, partner:users(display_name), lead:users(display_name)").eq("shift_date", today);
+      const { data, error } = await supabase.rpc("my_partnerships");
       if (error) throw error;
-      return (data ?? []) as { id: string; lead_id: string; partner_id: string; status: string; shift_date?: string; partner?: { display_name?: string } | null; lead?: { display_name?: string } | null }[];
+      return (data ?? []) as PartnershipRow[];
     },
   });
-  const minePartnership = (partnerships.data ?? []).find((row) => row.lead_id === profile?.id && (row.status === "accepted" || row.status === "pending"));
-  const asPartner = (partnerships.data ?? []).find((row) => row.partner_id === profile?.id && row.status === "accepted");
+  const todayRows = (partnerships.data ?? []).filter((row) => String(row.shift_date).slice(0, 10) === today);
+  const minePartnership = todayRows.find((row) => row.lead_id === profile?.id && (row.status === "accepted" || row.status === "pending"));
+  const asPartner = todayRows.find((row) => row.partner_id === profile?.id && row.status === "accepted");
   const partnerLabel = minePartnership?.status === "accepted"
-    ? `Partner today: ${firstName(minePartnership.partner?.display_name)}`
+    ? `Partner today: ${firstName(minePartnership.partner_first_name)}`
     : minePartnership?.status === "pending"
-      ? `Waiting for ${firstName(minePartnership.partner?.display_name)} to accept`
+      ? `Waiting for ${firstName(minePartnership.partner_first_name)} to accept`
       : "Partner today: None";
   const jobs = useQuery({
     queryKey: ["open-jobs", profile?.id],
@@ -78,6 +80,19 @@ export default function DriverJobs() {
         .reduce((sum, row) => sum + (row.amount_cents ?? 0), 0);
     },
   });
+  const partnerJobs = useQuery({
+    queryKey: ["partner-on", profile?.id],
+    enabled: Boolean(profile?.id),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("jobs")
+        .select("*")
+        .eq("partner_driver_id", profile!.id)
+        .in("status", ["assigned", "en_route_pickup", "at_pickup", "en_route_dropoff", "at_dropoff", "delivered"]);
+      if (error) throw error;
+      return (data ?? []) as Job[];
+    },
+  });
   const rows = online ? (jobs.data ?? []) : [];
   const pins: MapPin[] = rows.map((job, index) => ({
     id: job.id,
@@ -103,7 +118,33 @@ export default function DriverJobs() {
     }
   }
 
-  const active = mine.data?.[0];
+  const backingOut = (mine.data ?? []).filter((job) => job.partner_lost_at && (job.status === "assigned" || job.status === "en_route_pickup"));
+  const currentJobs = (mine.data ?? []).filter((job) => !job.partner_lost_at);
+
+  async function endDay() {
+    setActionNote("");
+    const { error } = await supabase.rpc("end_partnership");
+    if (error) {
+      setActionNote(error.message);
+      return;
+    }
+    await queryClient.invalidateQueries();
+  }
+
+  async function releaseJob() {
+    setActionNote("");
+    const { data, error } = await supabase.rpc("release_partner_job");
+    if (error) {
+      setActionNote(error.message);
+      return;
+    }
+    const result = data as { status?: string; message?: string } | null;
+    if (result?.status === "none") {
+      setActionNote(result.message || "No job to release");
+      return;
+    }
+    await queryClient.invalidateQueries();
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: C.paper }}>
@@ -134,59 +175,71 @@ export default function DriverJobs() {
           )}
         </View>
       </View>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
-        <Pressable accessibilityRole="button" accessibilityLabel={partnerLabel} onPress={() => setPartnerOpen(true)} style={{ alignSelf: "flex-start", backgroundColor: C.white, borderRadius: 999, paddingHorizontal: 14, minHeight: 44, justifyContent: "center", marginBottom: 12 }}>
-          <Text style={{ fontFamily: font.semi, fontSize: 15 }}>{partnerLabel} ›</Text>
-        </Pressable>
-        {(partnerships.data ?? []).filter((row) => row.partner_id === profile?.id && row.status === "pending").map((row) => (
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 96 }}>
+        {asPartner ? null : (
+          <Pressable accessibilityRole="button" accessibilityLabel={partnerLabel} onPress={() => setPartnerOpen(true)} style={{ alignSelf: "flex-start", backgroundColor: C.white, borderRadius: 999, paddingHorizontal: 14, minHeight: 44, justifyContent: "center", marginBottom: 12 }}>
+            <Text style={{ fontFamily: font.semi, fontSize: 15 }}>{partnerLabel} ›</Text>
+          </Pressable>
+        )}
+        {todayRows.filter((row) => row.partner_id === profile?.id && row.status === "pending").map((row) => (
           <Pressable key={row.id} accessibilityRole="button" onPress={() => router.push(`/invite/${row.id}`)} style={{ backgroundColor: C.white, borderRadius: 18, padding: 16, marginBottom: 12 }}>
-            <Text style={{ fontFamily: font.semi, fontSize: 16 }}>{firstName(row.lead?.display_name)} added you as their partner today.</Text>
+            <Text style={{ fontFamily: font.semi, fontSize: 16 }}>{firstName(row.lead_first_name)} added you as their partner today.</Text>
             <Text style={{ fontFamily: font.body, fontSize: 15, color: C.steel, marginTop: 4 }}>Your share is paid to you directly.</Text>
             <Text style={{ fontFamily: font.semi, fontSize: 15, marginTop: 8 }}>Accept or not today</Text>
           </Pressable>
         ))}
-        {active?.partner_lost_at ? (
-          <View style={{ backgroundColor: C.white, borderRadius: 18, padding: 16, marginBottom: 12 }}>
-            <Text style={{ fontFamily: font.semi, fontSize: 16 }}>{backoutCopy(active.partner_lost_at)}</Text>
+        {backingOut.map((job) => (
+          <View key={job.id} style={{ backgroundColor: C.white, borderRadius: 18, padding: 16, marginBottom: 12 }}>
+            <Text style={{ fontFamily: font.semi, fontSize: 16 }}>{job.item_description}</Text>
+            <Text style={{ fontFamily: font.body, fontSize: 15, color: C.ink, marginTop: 4 }}>{backoutCopy(job.partner_lost_at!)}</Text>
             <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
               <View style={{ flex: 1 }}><PrimaryButton label="Pick partner" onPress={() => setPartnerOpen(true)} /></View>
-              <View style={{ flex: 1 }}><OutlineButton label="Release job" onPress={() => void supabase.rpc("release_partner_job").then(() => queryClient.invalidateQueries())} /></View>
+              <View style={{ flex: 1 }}><OutlineButton label="Release job" onPress={() => void releaseJob()} /></View>
             </View>
+            {actionNote ? <Text style={{ marginTop: 10, fontFamily: font.body, fontSize: 15, color: C.ink }}>{actionNote}</Text> : null}
           </View>
-        ) : null}
+        ))}
         {asPartner ? (
-          <View style={{ backgroundColor: C.white, borderRadius: 18, padding: 16 }}>
-            <Text style={{ fontFamily: font.semi, fontSize: 18 }}>You're partnered with {firstName(asPartner.lead?.display_name)} today</Text>
+          <View style={{ backgroundColor: C.white, borderRadius: 18, padding: 16, marginBottom: 12 }}>
+            <Text style={{ fontFamily: font.semi, fontSize: 18 }}>You're partnered with {firstName(asPartner.lead_first_name)} today</Text>
             <View style={{ marginTop: 12 }}>
-              <OutlineButton label="End" onPress={() => void supabase.rpc("end_partnership").then(() => queryClient.invalidateQueries())} />
+              <OutlineButton label="End" onPress={() => void endDay()} />
             </View>
+            {actionNote ? <Text style={{ marginTop: 10, fontFamily: font.body, fontSize: 15, color: C.ink }}>{actionNote}</Text> : null}
           </View>
         ) : null}
-        {active && !asPartner ? (
-          <Pressable onPress={() => router.push(`/job/${active.id}`)} style={{ backgroundColor: C.white, borderRadius: 18, padding: 16, marginBottom: 12 }}>
-            <Text style={{ fontFamily: font.semi, fontSize: 16 }}>Current job · {active.item_description}</Text>
-            <Text style={{ color: C.steel, marginTop: 4, fontFamily: font.body, fontSize: 14 }}>{active.pickup_address}</Text>
+        {asPartner ? (partnerJobs.data ?? []).map((job) => (
+          <Pressable key={job.id} onPress={() => router.push(`/job/${job.id}`)} style={{ backgroundColor: C.white, borderRadius: 18, padding: 16, marginBottom: 12 }}>
+            <Text style={{ fontFamily: font.semi, fontSize: 16 }}>{job.item_description}</Text>
+            <Text style={{ color: C.steel, marginTop: 4, fontFamily: font.body, fontSize: 14 }}>{job.pickup_address}</Text>
+            <Text style={{ fontFamily: font.semi, fontSize: 16, marginTop: 8 }}>You get {formatUsd(job.helper_payout_cents ?? 0)}</Text>
           </Pressable>
-        ) : null}
-        {jobs.isLoading ? (
+        )) : null}
+        {!asPartner ? currentJobs.map((job) => (
+          <Pressable key={job.id} onPress={() => router.push(`/job/${job.id}`)} style={{ backgroundColor: C.white, borderRadius: 18, padding: 16, marginBottom: 12 }}>
+            <Text style={{ fontFamily: font.semi, fontSize: 16 }}>Current job · {job.item_description}</Text>
+            <Text style={{ color: C.steel, marginTop: 4, fontFamily: font.body, fontSize: 14 }}>{job.pickup_address}</Text>
+          </Pressable>
+        )) : null}
+        {jobs.isLoading && !asPartner ? (
           <View style={{ gap: 10 }}>
             <View style={{ width: 180, height: 28, borderRadius: 8, backgroundColor: C.sand150 }} />
             <View style={{ height: 120, borderRadius: 18, backgroundColor: C.sand150 }} />
             <View style={{ height: 120, borderRadius: 18, backgroundColor: C.sand150 }} />
           </View>
-        ) : (
+        ) : asPartner ? null : (
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
           <Text style={{ fontFamily: font.heading, fontSize: 22 }}>{rows.length === 1 ? "1 job near you" : `${rows.length} jobs near you`}</Text>
           <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 14 }}>Highest pay first</Text>
         </View>
         )}
-        {!online ? (
+        {!online && !asPartner ? (
           <View style={{ alignItems: "flex-start", gap: 12 }}>
             <Text style={{ fontFamily: font.body, fontSize: 16, color: C.steel }}>You're offline. Go online to see jobs near you.</Text>
             <PrimaryButton label="Go online" onPress={() => setOnline(true)} />
           </View>
         ) : null}
-        {online && jobs.isSuccess && rows.length === 0 ? (
+        {online && !asPartner && jobs.isSuccess && rows.length === 0 ? (
           <View style={{ alignItems: "center", padding: 16 }}>
             <FloatingIllustration name="box-sleep" />
             <Text style={{ marginTop: 8, textAlign: "center", color: C.steel, fontFamily: font.body, fontSize: 16 }}>
@@ -202,6 +255,17 @@ export default function DriverJobs() {
     </View>
   );
 }
+
+type PartnershipRow = {
+  id: string;
+  lead_id: string;
+  partner_id: string;
+  status: string;
+  shift_date?: string;
+  lead_first_name?: string | null;
+  partner_first_name?: string | null;
+  phone?: string | null;
+};
 
 function firstName(name?: string | null) {
   return name?.split(" ")[0] || "your partner";

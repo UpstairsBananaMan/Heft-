@@ -40,7 +40,8 @@ function pointKey(end: TripEnd): string {
 /**
  * Known demo pairs use fixed road miles and are labeled "demo".
  * Anything else is the straight-line ×1.3 estimate, labeled estimated.
- * Demo booking still allows both. Real quotes never call this.
+ * Demo booking of an estimate stays behind the demo flag and says "Demo distance".
+ * Real quotes never call this, and real publish refuses estimated.
  */
 export function demoRoadMiles(pickup: TripEnd, dropoff: TripEnd): { miles: number; source: DemoDistanceSource } {
   const fixed = FIXED_MILES[`${pointKey(pickup)}|${pointKey(dropoff)}`];
@@ -67,6 +68,6 @@ export function demoTrip(pickup: TripEnd, dropoff: TripEnd): DemoTrip {
     pickupInZone,
     dropoffInZone,
     distanceSource: road.source,
-    distanceLabel: road.source === "demo" ? "Demo road miles" : "Estimated demo distance. You can still book in this demo.",
+    distanceLabel: road.source === "demo" ? "Demo road miles" : "Demo distance. You can still book in this demo.",
   };
 }

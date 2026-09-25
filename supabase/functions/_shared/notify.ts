@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.49.8";
+import { APP_NAME } from "../../../packages/shared/src/brand.ts";
 import { haversineMiles, vehicleCovers } from "./pricing.ts";
 
 type JobRow = {
@@ -68,7 +69,7 @@ export async function notifyJobEvent(
       .in("user_id", userIds);
     const messages = (tokens ?? []).map((row) => ({
       to: row.token,
-      title: "Heft",
+      title: APP_NAME,
       body: COPY[event] ?? `Job update: ${event}`,
       data: { job_id: job.id, event },
       sound: "default",
@@ -103,7 +104,7 @@ export async function notifyAdmins(
     const { data: tokens } = await admin.from("device_tokens").select("token").in("user_id", ids);
     const messages = (tokens ?? []).map((row: { token: string }) => ({
       to: row.token,
-      title: "Heft",
+      title: APP_NAME,
       body: message,
       data: { job_id: jobId, event: "distance_estimated" },
       sound: "default",

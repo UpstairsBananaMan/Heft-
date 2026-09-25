@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { ArrowLeftRight, ArrowLeft, Clock, LocateFixed, MapPin } from "lucide-react-native";
-import { DEMO_PLACES, filterPlaces, HARDWARE_SUGGESTION, haversineMiles, PENSACOLA_CENTER, PENSACOLA_PLACES, type PlacePreset } from "@heft/shared";
+import { DEMO_PLACES, DISTANCE_UNAVAILABLE, filterPlaces, HARDWARE_SUGGESTION, haversineMiles, PENSACOLA_CENTER, PENSACOLA_PLACES, type PlacePreset } from "@heft/shared";
 import { demoMode } from "../../src/lib/supabase";
 import { errorText, invoke } from "../../src/lib/invoke";
 import { haptic } from "../../src/lib/haptics";
@@ -38,10 +38,15 @@ export default function WhereScreen() {
         dropoff_address: state.dropoff.address,
         dropoff_zip: state.dropoff.zip ?? null,
       });
+      if (covered.distanceSource === "estimated" && !demoMode) {
+        booking.patch({ trip: null, distanceSource: null, distanceLabel: null, miles: null, lines: null, totalCents: null, jobId: null });
+        setNotice(DISTANCE_UNAVAILABLE);
+        return;
+      }
       booking.patch({
         trip: covered,
         distanceSource: covered.distanceSource,
-        distanceLabel: covered.distanceLabel ?? (covered.distanceSource === "estimated" ? "Estimated demo distance. You can still book in this demo." : covered.distanceSource === "demo" ? "Demo road miles" : null),
+        distanceLabel: demoMode ? (covered.distanceLabel ?? null) : null,
       });
       const step = state.skipAfterAddress === "price" && state.size ? "price" : state.presetItem ? "size" : "item";
       booking.patch({ step });

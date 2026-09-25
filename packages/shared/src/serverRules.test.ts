@@ -4,20 +4,29 @@ import { describe, it } from "node:test";
 import { neighbourhood } from "./geo";
 import { PICKUP_RATES } from "./pricing/computeQuote";
 import { SERVICE_ZONE_ZIPS } from "./pricing/zone";
+import { APP_NAME } from "./brand";
+import brandJson from "../brand.json";
 import {
+  DISTANCE_UNAVAILABLE,
   ESTIMATED_DISTANCE_ALERT,
   LOCKED_JOB_COLUMNS,
+  PRICE_UPDATED,
   canReuseMapsDistance,
   coverageDecision,
+  demoPublishBlock,
   inviteBlock,
+  invitePushAllowed,
   missingPayouts,
   payoutsComplete,
   protectCustomerJobWrite,
+  publishBlock,
   ratesFromCard,
   replacementPartnerPatch,
   requiredPayouts,
   respondBlock,
+  shouldCaptureHold,
   twoPersonProgressBlock,
+  visiblePartnerPhone,
   zipInListedZone,
 } from "./pricing/serverRules";
 
@@ -147,9 +156,21 @@ describe("partner guards", () => {
     assert.equal(inviteBlock({ status: "approved", partner_only: false }, false), null);
   });
 
-  it("refuses an invitee who is already on a job", () => {
-    assert.equal(respondBlock(true), "Finish your current job first");
-    assert.equal(respondBlock(false), null);
+  it("refuses an invitee who is already on a job, already partnered, or not ready", () => {
+    const ready = {
+      inviteeHasLeadJob: false,
+      inviteeHasAcceptedPartner: false,
+      inviteeHasPendingOutgoing: false,
+      approved: true,
+      backgroundChecked: true,
+      payoutsReady: true,
+    };
+    assert.equal(respondBlock({ ...ready, inviteeHasLeadJob: true }), "Finish your current job first");
+    assert.equal(respondBlock({ ...ready, inviteeHasAcceptedPartner: true }), "You already have a partner for today");
+    assert.equal(respondBlock({ ...ready, inviteeHasPendingOutgoing: true }), "You already have a partner for today");
+    assert.equal(respondBlock({ ...ready, payoutsReady: false }), "You need to be approved with a background check and payouts set up");
+    assert.equal(respondBlock({ ...ready, backgroundChecked: false }), "You need to be approved with a background check and payouts set up");
+    assert.equal(respondBlock(ready), null);
   });
 
   it("blocks a 2-person job from leaving accepted without a partner", () => {
@@ -219,7 +240,86 @@ describe("real path wiring", () => {
 
   it("sends the partner invite push with the partnership id", () => {
     const notify = source("supabase/functions/notify/index.ts");
+    const shared = source("supabase/functions/_shared/notify.ts");
     assert.match(notify, /partnership_id/);
     assert.match(notify, /partner-invite/);
+    assert.match(notify, /invitePushAllowed/);
+    assert.doesNotMatch(notify, /title: "Heft"/);
+    assert.doesNotMatch(shared, /title: "Heft"/);
+    assert.match(notify, /APP_NAME/);
+    assert.match(shared, /APP_NAME/);
+    assert.equal(APP_NAME, brandJson.appName);
+  });
+
+  it("refuses an estimated distance on the real publish path", () => {
+    const now = Date.parse("2026-09-24T18:00:00.000Z");
+    const fresh = {
+      quotedAt: "2026-09-24T17:30:00.000Z",
+      ratesVersion: PICKUP_RATES.ratesVersion,
+      expectedRatesVersion: PICKUP_RATES.ratesVersion,
+      savedTotalCents: 7900,
+      recomputedTotalCents: 7900,
+      bookable: true,
+      nowMs: now,
+    };
+    assert.equal(publishBlock({ ...fresh, distanceSource: "maps" }), null);
+    assert.equal(publishBlock({ ...fresh, distanceSource: "estimated" }), PRICE_UPDATED);
+    assert.equal(publishBlock({ ...fresh, distanceSource: "estimated", bookable: false }), PRICE_UPDATED);
+    assert.equal(demoPublishBlock({ ...fresh, distanceSource: "estimated", allowEstimated: false }), PRICE_UPDATED);
+    assert.equal(demoPublishBlock({ ...fresh, distanceSource: "estimated", allowEstimated: true }), null);
+    const publish = source("supabase/functions/publish-job/index.ts");
+    assert.match(publish, /publishBlock/);
+    assert.doesNotMatch(publish, /allowEstimated|demoPublishBlock/);
+    const where = source("apps/mobile/app/(customer)/where.tsx");
+    assert.doesNotMatch(where, /You can still book in this demo/);
+    assert.doesNotMatch(where, /Estimated demo distance/);
+    assert.match(where, /demoMode/);
+    assert.match(where, /DISTANCE_UNAVAILABLE/);
+    assert.match(DISTANCE_UNAVAILABLE, /Try again/);
+    const quote = source("supabase/functions/quote/index.ts");
+    assert.match(quote, /DISTANCE_UNAVAILABLE/);
+  });
+
+  it("skips a second card capture and masks partner phones", () => {
+    assert.equal(shouldCaptureHold({ capturedAt: null, intentStatus: "requires_capture" }), true);
+    assert.equal(shouldCaptureHold({ capturedAt: "2026-09-24T18:00:00.000Z", intentStatus: "requires_capture" }), false);
+    assert.equal(shouldCaptureHold({ capturedAt: null, intentStatus: "succeeded" }), false);
+    const complete = source("supabase/functions/complete-job/index.ts");
+    assert.ok(complete.indexOf("shouldCaptureHold") < complete.indexOf("captureHold"));
+    assert.match(complete, /paymentIntentStatus/);
+    assert.match(complete, /payment_captured_at/);
+    assert.equal(visiblePartnerPhone({ callerIsLead: false, currentInvite: true, phone: "8505550199" }), null);
+    assert.equal(visiblePartnerPhone({ callerIsLead: true, currentInvite: true, phone: "8505550199" }), "8505550199");
+    assert.equal(visiblePartnerPhone({ callerIsLead: true, currentInvite: false, phone: "8505550199" }), "0199");
+    const now = Date.parse("2026-09-24T18:00:00.000Z");
+    assert.equal(invitePushAllowed({ status: "declined", invite_pushed_at: null }, now), false);
+    assert.equal(invitePushAllowed({ status: "pending", invite_pushed_at: null }, now), true);
+    assert.equal(invitePushAllowed({ status: "pending", invite_pushed_at: "2026-09-24T17:55:00.000Z" }, now), false);
+  });
+
+  it("reads partners through an RPC and lets a customer see a new draft", () => {
+    const sql = source("supabase/migrations/20260928120000_partner_read_and_capture.sql");
+    assert.match(sql, /my_partnerships/);
+    assert.match(sql, /partnership_detail/);
+    assert.match(sql, /jobs_select_own/);
+    assert.match(sql, /customer_id = auth\.uid\(\)/);
+    assert.match(sql, /grant insert/);
+    assert.match(sql, /grant update/);
+    assert.match(sql, /revoke insert, update on table public\.jobs from authenticated/);
+    assert.match(sql, /No job to release/);
+    assert.match(sql, /background_check_at is null/);
+    assert.match(sql, /You already have a partner for today/);
+    for (const file of [
+      "apps/mobile/app/(driver)/(tabs)/map.tsx",
+      "apps/mobile/src/components/PartnerSheet.tsx",
+      "apps/mobile/app/(driver)/invite/[id].tsx",
+    ]) {
+      const text = source(file);
+      assert.doesNotMatch(text, /partner:users|lead:users/);
+    }
+    assert.match(source("apps/mobile/app/(driver)/(tabs)/map.tsx"), /my_partnerships/);
+    assert.match(source("apps/mobile/app/(driver)/invite/[id].tsx"), /partnership_detail/);
+    assert.match(source("apps/mobile/app/(customer)/(tabs)/home.tsx"), /billableMiles/);
+    assert.doesNotMatch(source("apps/mobile/app/(customer)/(tabs)/home.tsx"), /haversineMiles/);
   });
 });

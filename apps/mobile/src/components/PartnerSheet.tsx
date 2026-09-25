@@ -9,7 +9,15 @@ import { useSession } from "../store/session";
 import { C, font, OutlineButton } from "./v2";
 
 type Invite = { status: string; name?: string; partnership_id?: string; auto_accept?: boolean };
-type Recent = { id: string; partner_id: string; status: string; shift_date?: string; partner?: { display_name?: string; phone?: string } | null };
+type Recent = {
+  id: string;
+  lead_id?: string;
+  partner_id: string;
+  status: string;
+  shift_date?: string;
+  partner_first_name?: string | null;
+  phone?: string | null;
+};
 
 export function PartnerSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const profile = useSession((state) => state.profile);
@@ -21,34 +29,34 @@ export function PartnerSheet({ open, onClose }: { open: boolean; onClose: () => 
     queryKey: ["partner-history", profile?.id, open],
     enabled: open && Boolean(profile?.id),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("driver_partnerships")
-        .select("id, partner_id, status, shift_date, partner:users(display_name, phone)")
-        .eq("lead_id", profile!.id);
+      const { data, error } = await supabase.rpc("my_partnerships");
       if (error) throw error;
-      return (data ?? []) as Recent[];
+      return ((data ?? []) as Recent[]).filter((row) => row.lead_id === profile!.id);
     },
   });
   if (!open) return null;
   const rows = history.data ?? [];
-  const accepted = rows.find((row) => row.status === "accepted" && row.shift_date === today);
+  const accepted = rows.find((row) => row.status === "accepted" && String(row.shift_date).slice(0, 10) === today);
   const seen = new Set<string>();
   const recent = rows.filter((row) => {
     if (!row.partner_id || row.partner_id === accepted?.partner_id || seen.has(row.partner_id)) return false;
     seen.add(row.partner_id);
-    return Boolean(row.partner?.display_name);
+    return Boolean(row.partner_first_name);
   });
 
-  async function invite(number: string) {
+  async function reinvite(partnerId: string) {
     setPending(true);
     setNote("");
-    const { data, error } = await supabase.rpc("invite_partner", { phone: number });
+    const { data, error } = await supabase.rpc("reinvite_partner", { p_partner_id: partnerId });
     setPending(false);
     if (error) {
       setNote(error.message);
       return;
     }
-    const result = data as Invite;
+    noteInvite(data as Invite);
+  }
+
+  function noteInvite(result: Invite) {
     if (result.status === "no_account") {
       setNote("No approved driver with that number. Send them the sign-up link.");
       return;
@@ -77,6 +85,18 @@ export function PartnerSheet({ open, onClose }: { open: boolean; onClose: () => 
     setNote(result.status === "invited" ? `Waiting for ${result.name ?? "them"} to accept` : "Couldn't add that partner.");
   }
 
+  async function invite(number: string) {
+    setPending(true);
+    setNote("");
+    const { data, error } = await supabase.rpc("invite_partner", { phone: number });
+    setPending(false);
+    if (error) {
+      setNote(error.message);
+      return;
+    }
+    noteInvite(data as Invite);
+  }
+
   return (
     <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, top: 0, backgroundColor: "rgba(26,29,33,0.35)", justifyContent: "flex-end" }}>
       <View style={{ backgroundColor: C.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 }}>
@@ -85,14 +105,16 @@ export function PartnerSheet({ open, onClose }: { open: boolean; onClose: () => 
           <Pressable
             key={row.partner_id}
             accessibilityRole="button"
-            accessibilityLabel={row.partner?.display_name ?? "Recent partner"}
+            accessibilityLabel={row.partner_first_name ?? "Recent partner"}
             onPress={() => {
               haptic.select();
-              if (row.partner?.phone) void invite(row.partner.phone);
+              const digits = String(row.phone ?? "").replace(/\D/g, "");
+              if (digits.length >= 10) void invite(digits);
+              else void reinvite(row.partner_id);
             }}
             style={{ minHeight: 56, justifyContent: "center", borderBottomWidth: 1, borderBottomColor: C.sand200 }}
           >
-            <Text style={{ fontFamily: font.semi, fontSize: 16 }}>{row.partner?.display_name}</Text>
+            <Text style={{ fontFamily: font.semi, fontSize: 16 }}>{row.partner_first_name}</Text>
           </Pressable>
         ))}
         <TextInput
@@ -117,7 +139,13 @@ export function PartnerSheet({ open, onClose }: { open: boolean; onClose: () => 
         </Pressable>
         {accepted ? (
           <View style={{ marginTop: 10 }}>
-            <OutlineButton label="End partner for today" onPress={() => void supabase.rpc("end_partnership").then(() => onClose())} />
+            <OutlineButton label="End partner for today" onPress={() => void supabase.rpc("end_partnership").then(({ error }) => {
+              if (error) {
+                setNote(error.message);
+                return;
+              }
+              onClose();
+            })} />
           </View>
         ) : null}
         <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={{ minHeight: 44, alignItems: "center", justifyContent: "center" }}>

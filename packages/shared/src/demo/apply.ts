@@ -3,6 +3,8 @@ import { demoTrip, type TripEnd } from "../pricing/demoTrip";
 import { requiresSecondPerson } from "../pricing/secondPerson";
 import { chicagoDate, phoneDigits } from "../pricing/clock";
 import {
+  PRICE_UPDATED,
+  demoPublishBlock,
   inviteBlock,
   leadJobInProgress,
   missingPayouts,
@@ -11,7 +13,9 @@ import {
   replacementPartnerPatch,
   requiredPayouts,
   respondBlock,
+  shouldCaptureHold,
   twoPersonProgressBlock,
+  visiblePartnerPhone,
 } from "../pricing/serverRules";
 import { canCancel, nextDriverStatus } from "../status";
 import type { JobStatus, Role } from "../types";
@@ -355,7 +359,13 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
     if (!trip.ok) return fail(state, coverageMessage(trip.error));
     return ok(state, trip);
   }
+  if (request.name === "my_partnerships") return ok(state, myPartnerships(state, actor.id));
+  if (request.name === "partnership_detail") {
+    const rows = myPartnerships(state, actor.id);
+    return ok(state, rows.find((row) => row.id === String(body.p_id ?? "")) ?? null);
+  }
   if (request.name === "invite_partner") return invitePartner(state, actor.id, String(body.phone ?? ""));
+  if (request.name === "reinvite_partner") return reinvitePartner(state, actor.id, String(body.p_partner_id ?? ""));
   if (request.name === "respond_partner") return respondPartner(state, actor.id, String(body.p_id ?? body.partnership_id ?? ""), body.p_accept !== false && body.accept !== false);
   if (request.name === "end_partnership") return endPartnership(state, actor.id);
   if (request.name === "simulate-partner-backout") return simulateBackout(state, actor.id);
@@ -396,12 +406,13 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
       pickupFlights,
       dropoffFlights,
     });
+    const quoteDistance = trip.distanceSource === "estimated" ? "estimated" : "maps";
     let quote;
     try {
       quote = computeQuote({
         sizeTier: tier,
         roadMiles: trip.roadMiles,
-        distanceSource: "maps",
+        distanceSource: quoteDistance,
         pickupInZone: trip.pickupInZone,
         dropoffInZone: trip.dropoffInZone,
         pickupFlights,
@@ -448,7 +459,7 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
       job_id: job.id,
       type: "priced",
       actor_id: actor.id,
-      payload: { seed: "demo", distance_source: "maps", total_cents: quote.totalCents },
+      payload: { seed: "demo", distance_source: trip.distanceSource, total_cents: quote.totalCents },
       created_at: new Date().toISOString(),
     });
     return ok(state, {
@@ -462,7 +473,7 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
       driver_payout_cents: quote.leadDriverKeepsCents,
       lead_payout_cents: quote.leadDriverKeepsCents,
       helper_payout_cents: quote.helperShareCents,
-      bookable: quote.bookable,
+      bookable: trip.distanceSource === "estimated" ? true : quote.bookable,
       sandbox: true,
       status: "priced",
     });
@@ -565,6 +576,10 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
       existing.map((row) => ({ driver_id: row.driver_id ? String(row.driver_id) : null, role: row.role ? String(row.role) : null })),
     );
     const nowPaid = new Date().toISOString();
+    const capturedAt = job.payment_captured_at ? String(job.payment_captured_at) : null;
+    if (shouldCaptureHold({ capturedAt, intentStatus: capturedAt ? "succeeded" : "requires_capture" })) {
+      job.payment_captured_at = nowPaid;
+    }
     for (const need of missing) {
       state.payouts.push({
         id: id(),
@@ -603,7 +618,6 @@ function applyInvoke(state: DemoState, request: Extract<DemoRequest, { kind: "in
   return fail(state, `Unknown function ${request.name}`);
 }
 
-const UPDATED = "Your price was updated. Please take a look.";
 const FAR = "That's farther than we go right now. We cover trips that start or end around Pensacola, up to 70 miles.";
 const NO_ZIP = "We couldn't pin down that address. Try adding the street number, or pick a suggestion from the list.";
 
@@ -637,16 +651,13 @@ function coverTrip(body: Record<string, unknown>) {
 }
 
 function publishRefusal(job: DemoRow): string | null {
-  const quotedAt = job.quoted_at ? new Date(String(job.quoted_at)).getTime() : 0;
-  if (!quotedAt || Date.now() - quotedAt > 60 * 60 * 1000) return UPDATED;
-  if (job.distance_source !== "maps" && job.distance_source !== "demo" && job.distance_source !== "estimated") return UPDATED;
-  if (job.rates_version !== PICKUP_RATES.ratesVersion) return UPDATED;
+  const source = String(job.distance_source ?? "");
   const tier = String(job.size_tier ?? job.size_category ?? "medium") as SizeTier;
   try {
     const quote = computeQuote({
       sizeTier: tier,
       roadMiles: Number(job.billable_miles ?? job.distance_miles ?? 0),
-      distanceSource: "maps",
+      distanceSource: source === "estimated" ? "estimated" : "maps",
       pickupInZone: job.pickup_in_zone === true,
       dropoffInZone: job.dropoff_in_zone === true,
       pickupFlights: Number(job.stairs_pickup_flights ?? 0),
@@ -655,11 +666,57 @@ function publishRefusal(job: DemoRow): string | null {
       estJobHours: Number(job.est_job_minutes ?? 0) / 60,
       vehicleType: "pickup",
     });
-    if (quote.totalCents !== Number(job.final_cents ?? job.estimate_cents)) return UPDATED;
+    return demoPublishBlock({
+      quotedAt: job.quoted_at ? String(job.quoted_at) : null,
+      ratesVersion: job.rates_version ? String(job.rates_version) : null,
+      expectedRatesVersion: PICKUP_RATES.ratesVersion,
+      distanceSource: source,
+      savedTotalCents: Number(job.final_cents ?? job.estimate_cents ?? 0),
+      recomputedTotalCents: quote.totalCents,
+      bookable: quote.bookable,
+      allowEstimated: true,
+    });
   } catch {
-    return UPDATED;
+    return PRICE_UPDATED;
   }
-  return null;
+}
+
+function firstName(name: unknown): string {
+  return String(name ?? "").split(" ")[0] ?? "";
+}
+
+function myPartnerships(state: DemoState, callerId: string) {
+  const today = chicagoDate();
+  return state.driver_partnerships
+    .filter((row) => row.lead_id === callerId || row.partner_id === callerId)
+    .map((row) => {
+      const lead = state.users.find((user) => user.id === row.lead_id);
+      const partner = state.users.find((user) => user.id === row.partner_id);
+      const currentInvite = row.lead_id === callerId && row.shift_date === today && (row.status === "pending" || row.status === "accepted");
+      return {
+        id: String(row.id),
+        lead_id: String(row.lead_id),
+        partner_id: String(row.partner_id),
+        status: String(row.status),
+        shift_date: String(row.shift_date ?? ""),
+        lead_first_name: firstName(lead?.display_name),
+        lead_avatar_url: (lead?.avatar_url as string | null) ?? null,
+        partner_first_name: firstName(partner?.display_name),
+        partner_avatar_url: (partner?.avatar_url as string | null) ?? null,
+        phone: visiblePartnerPhone({
+          callerIsLead: row.lead_id === callerId,
+          currentInvite,
+          phone: partner?.phone ? String(partner.phone) : null,
+        }),
+      };
+    });
+}
+
+function reinvitePartner(state: DemoState, leadId: string, partnerId: string) {
+  const prior = state.driver_partnerships.some((row) => row.lead_id === leadId && row.partner_id === partnerId);
+  if (!prior) return fail(state, "No past partnership with that driver");
+  const person = state.users.find((user) => user.id === partnerId);
+  return invitePartner(state, leadId, String(person?.phone ?? ""));
 }
 
 function invitePartner(state: DemoState, leadId: string, phone: string) {
@@ -707,10 +764,28 @@ function respondPartner(state: DemoState, actorId: string, partnershipId: string
   const row = state.driver_partnerships.find((item) => item.id === partnershipId);
   if (!row) return fail(state, "Invite not found");
   if (row.partner_id !== actorId && row.lead_id !== actorId) return fail(state, "not allowed");
-  if (row.status !== "pending") return fail(state, "This invite is no longer open");
+  if (row.status !== "pending" || (row.shift_date && row.shift_date !== chicagoDate())) {
+    return fail(state, "This invite is no longer open");
+  }
   if (accept) {
-    const inviteeBusy = state.jobs.some((job) => job.driver_id === row.partner_id && leadJobInProgress(String(job.status)));
-    const blocked = respondBlock(inviteeBusy);
+    const today = chicagoDate();
+    const profile = state.driver_profiles.find((item) => item.user_id === row.partner_id);
+    const blocked = respondBlock({
+      inviteeHasLeadJob: state.jobs.some((job) => job.driver_id === row.partner_id && leadJobInProgress(String(job.status))),
+      inviteeHasAcceptedPartner: state.driver_partnerships.some(
+        (item) =>
+          item.id !== row.id &&
+          item.shift_date === today &&
+          item.status === "accepted" &&
+          (item.lead_id === row.partner_id || item.partner_id === row.partner_id),
+      ),
+      inviteeHasPendingOutgoing: state.driver_partnerships.some(
+        (item) => item.id !== row.id && item.shift_date === today && item.status === "pending" && item.lead_id === row.partner_id,
+      ),
+      approved: profile?.status === "approved",
+      backgroundChecked: Boolean(profile?.background_check_at),
+      payoutsReady: Boolean(profile?.stripe_connect_account_id),
+    });
     if (blocked) return fail(state, blocked);
   }
   row.status = accept ? "accepted" : "declined";
@@ -814,8 +889,8 @@ function simulateBackout(state: DemoState, leadId: string) {
 }
 
 function releasePartnerWindow(state: DemoState, leadId: string) {
-  const job = state.jobs.find((item) => item.driver_id === leadId && item.partner_lost_at);
-  if (!job) return ok(state, { status: "none", message: "Job released, no penalty" });
+  const job = state.jobs.find((item) => item.driver_id === leadId && item.partner_lost_at && ["assigned", "en_route_pickup"].includes(String(item.status)));
+  if (!job) return ok(state, { status: "none", message: "No job to release" });
   job.status = "open";
   job.driver_id = null;
   job.partner_driver_id = null;

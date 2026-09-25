@@ -3,6 +3,7 @@ import { postalCode, routeMiles } from "../_shared/distance.ts";
 import { HttpError, json, readJson, serveJson } from "../_shared/http.ts";
 import { notifyAdmins } from "../_shared/notify.ts";
 import {
+  DISTANCE_UNAVAILABLE,
   ESTIMATED_DISTANCE_ALERT,
   QuoteError,
   canReuseMapsDistance,
@@ -87,7 +88,7 @@ serveJson(async (req) => {
       payload: { road_miles: roadMiles, alert: ESTIMATED_DISTANCE_ALERT },
     });
     await notifyAdmins(admin, ESTIMATED_DISTANCE_ALERT, jobId);
-    return json({ error: "distance_unavailable" }, 422);
+    return json({ error: DISTANCE_UNAVAILABLE, code: "distance_unavailable" }, 422);
   }
   const pickupInZone = decision.pickupInZone;
   const dropoffInZone = decision.dropoffInZone;

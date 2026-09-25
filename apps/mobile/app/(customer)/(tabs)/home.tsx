@@ -23,10 +23,11 @@ import {
   customerLines,
   defaultSize,
   driversApprovedLabel,
+  DISTANCE_UNAVAILABLE,
+  billableMiles,
   computeQuote,
   estimateJobMinutes,
   formatUsd,
-  haversineMiles,
   neighbourhood,
   pickVehicle,
   requiresSecondPerson,
@@ -192,10 +193,12 @@ export default function CustomerHome() {
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: font.semi, fontSize: 14, color: C.ink }}>{short(booking.pickup.address)}</Text>
               <Text style={{ fontFamily: font.semi, fontSize: 14, color: C.ink }}>{short(booking.dropoff.address)}</Text>
+              {booking.trip ? (
+                <Text style={{ textAlign: "center", fontFamily: font.medium, color: C.steel, fontSize: 14, marginTop: 4 }}>
+                  {billableMiles(booking.trip.roadMiles)} mi
+                </Text>
+              ) : null}
             </View>
-            <Text style={{ fontFamily: font.medium, color: C.steel, fontSize: 14 }}>
-              {haversineMiles(booking.pickup.lat, booking.pickup.lng, booking.dropoff.lat, booking.dropoff.lng).toFixed(1)} mi
-            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -594,6 +597,12 @@ function previewQuote(booking: {
   });
 }
 
+function quoteErrorText(err: unknown): string {
+  const message = errorText(err);
+  if (message === "distance_unavailable" || message === DISTANCE_UNAVAILABLE) return DISTANCE_UNAVAILABLE;
+  return message;
+}
+
 function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
   const profile = useSession((state) => state.profile);
   const booking = useBooking();
@@ -603,6 +612,8 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
   const [bookHold, setBookHold] = useState(false);
   const [rowsOn, setRowsOn] = useState(false);
   const [bookOn, setBookOn] = useState(false);
+  const estimated = booking.distanceSource === "estimated" || booking.trip?.distanceSource === "estimated";
+  const canBook = Boolean(booking.totalCents) && (!estimated || demoMode);
   const delight = useDelight({
     jobId: booking.jobId,
     moment: "price",
@@ -658,7 +669,7 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
           distanceLabel: quoted.distance_label ?? booking.trip?.distanceLabel ?? null,
         });
       } catch (err) {
-        if (!cancel) setError(errorText(err));
+        if (!cancel) setError(quoteErrorText(err));
       } finally {
         if (!cancel) setPending(false);
       }
@@ -716,7 +727,7 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
         setTimeout(() => setUpdated(false), 2000);
         setTimeout(() => setBookHold(false), 600);
       } else {
-        setError(message);
+        setError(quoteErrorText(err));
         haptic.error();
       }
     } finally {
@@ -728,7 +739,7 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
   const reveal = Boolean(booking.totalCents) && (delight.playing || delight.settled);
   return (
     <View style={{ flex: 1 }}>
-    <ScrollView contentContainerStyle={{ paddingBottom: 16 }}>
+    <ScrollView contentContainerStyle={{ paddingBottom: 96 }}>
       <Text style={{ fontFamily: font.heading, fontSize: 22, color: C.ink }}>Your price</Text>
       <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 14, marginBottom: 12 }}>{route}</Text>
       <View style={{ backgroundColor: C.white, borderRadius: 18, borderWidth: 1, borderColor: C.sand200, padding: 16 }}>
@@ -768,10 +779,12 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
           {updated && booking.totalCents ? `Price updated to ${formatUsd(booking.totalCents)}` : "All-in price, set before you book."}
         </Text>
         <Text style={{ color: C.green, fontFamily: font.semi, fontSize: 14 }}>{driversApprovedLabel()}</Text>
-        {booking.distanceLabel ? <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 13, marginTop: 4 }}>{booking.distanceLabel}</Text> : null}
+        {demoMode && booking.distanceLabel ? (
+          <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 13, marginTop: 4, textAlign: "center" }}>{booking.distanceLabel}</Text>
+        ) : null}
       </View>
-      <View pointerEvents={bookOn && !delight.locked ? "auto" : "none"} style={{ opacity: bookOn ? 1 : 0 }}>
-        <PrimaryButton label={pending ? "Getting your price…" : `Book for ${formatUsd(booking.totalCents)}`} disabled={pending || !booking.totalCents || delight.locked || bookHold} onPress={() => void book()} />
+      <View pointerEvents={bookOn && !delight.locked && canBook ? "auto" : "none"} style={{ opacity: bookOn && canBook ? 1 : 0 }}>
+        <PrimaryButton label={pending ? "Getting your price…" : `Book for ${formatUsd(booking.totalCents)}`} disabled={pending || !booking.totalCents || delight.locked || bookHold || !canBook} onPress={() => void book()} />
       </View>
       <Text style={{ textAlign: "center", marginTop: 8, fontFamily: font.body, fontSize: 14, color: C.steel }}>You're charged after delivery.</Text>
       <Text style={{ textAlign: "center", marginTop: 4, fontFamily: font.body, fontSize: 13, color: C.steel }}>

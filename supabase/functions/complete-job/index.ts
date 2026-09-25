@@ -1,8 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { HttpError, json, readJson, serveJson } from "../_shared/http.ts";
 import { notifyJobEvent } from "../_shared/notify.ts";
-import { missingPayouts, payoutsComplete, requiredPayouts } from "../_shared/pricing.ts";
-import { captureHold, createTransfer, stripeConfigured } from "../_shared/stripe.ts";
+import { missingPayouts, payoutsComplete, requiredPayouts, shouldCaptureHold } from "../_shared/pricing.ts";
+import { captureHold, createTransfer, paymentIntentStatus, stripeConfigured } from "../_shared/stripe.ts";
 import { requireUser } from "../_shared/supabase.ts";
 
 serveJson(async (req) => {
@@ -30,7 +30,17 @@ serveJson(async (req) => {
   const { data: existing } = await admin.from("payouts").select("*").eq("job_id", job.id);
   let payouts = existing ?? [];
   const missing = missingPayouts(required, payouts);
-  if (payouts.length === 0 && missing.length > 0) await captureHold(job.stripe_payment_intent_id);
+  const intentStatus = job.payment_captured_at ? "succeeded" : await paymentIntentStatus(job.stripe_payment_intent_id);
+  if (intentStatus === "canceled" || intentStatus === "cancelled") {
+    throw new HttpError(409, "The card hold is no longer available");
+  }
+  if (shouldCaptureHold({ capturedAt: job.payment_captured_at, intentStatus })) {
+    await captureHold(job.stripe_payment_intent_id);
+    const capturedAt = new Date().toISOString();
+    const { error: stampError } = await admin.from("jobs").update({ payment_captured_at: capturedAt }).eq("id", job.id);
+    if (stampError) throw new HttpError(500, "Payment was captured but not recorded. Try again.");
+    job.payment_captured_at = capturedAt;
+  }
   for (const need of missing) {
     try {
       payouts.push(await transferOne(admin, job, need.driverId, need.amountCents, need.role));

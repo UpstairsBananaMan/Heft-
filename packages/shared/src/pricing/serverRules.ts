@@ -14,6 +14,16 @@ export const FARTHER =
 export const ESTIMATED_DISTANCE_ALERT =
   "Maps distance was unavailable. This quote used an estimate and cannot be booked.";
 
+/** Customer copy when road miles fell back to a straight-line estimate. No price, no Book. */
+export const DISTANCE_UNAVAILABLE =
+  "We couldn't measure the road miles for this trip, so there's no price yet. Try again.";
+
+export const PRICE_UPDATED = "Your price was updated. Please take a look.";
+export const QUOTE_TTL_MS = 60 * 60 * 1000;
+
+/** A lead can nudge a pending invite, then has to wait. A declined invite never pushes. */
+export const INVITE_PUSH_GAP_MS = 10 * 60 * 1000;
+
 /** Columns a customer must not write. The quote function sets them. */
 export const LOCKED_JOB_COLUMNS = [
   "distance_miles",
@@ -218,9 +228,93 @@ export function inviteBlock(
   return null;
 }
 
-export function respondBlock(inviteeHasLeadJob: boolean): string | null {
-  if (inviteeHasLeadJob) return "Finish your current job first";
+export function respondBlock(input: {
+  inviteeHasLeadJob: boolean;
+  inviteeHasAcceptedPartner: boolean;
+  inviteeHasPendingOutgoing: boolean;
+  approved: boolean;
+  backgroundChecked: boolean;
+  payoutsReady: boolean;
+}): string | null {
+  if (input.inviteeHasLeadJob) return "Finish your current job first";
+  if (input.inviteeHasAcceptedPartner || input.inviteeHasPendingOutgoing) {
+    return "You already have a partner for today";
+  }
+  if (!input.approved || !input.backgroundChecked || !input.payoutsReady) {
+    return "You need to be approved with a background check and payouts set up";
+  }
   return null;
+}
+
+export function publishBlock(input: {
+  quotedAt?: string | null;
+  ratesVersion?: string | null;
+  expectedRatesVersion: string;
+  distanceSource?: string | null;
+  savedTotalCents: number;
+  recomputedTotalCents: number;
+  bookable: boolean;
+  nowMs?: number;
+}): string | null {
+  const quotedAt = input.quotedAt ? new Date(input.quotedAt).getTime() : 0;
+  const now = input.nowMs ?? Date.now();
+  if (!quotedAt || now - quotedAt > QUOTE_TTL_MS) return PRICE_UPDATED;
+  if (input.ratesVersion !== input.expectedRatesVersion) return PRICE_UPDATED;
+  if (input.distanceSource !== "maps") return PRICE_UPDATED;
+  if (!input.bookable || input.recomputedTotalCents !== input.savedTotalCents) return PRICE_UPDATED;
+  return null;
+}
+
+/**
+ * Demo may book a labeled estimate. The real publish path calls publishBlock,
+ * which refuses distance_source "estimated" with no escape hatch.
+ */
+export function demoPublishBlock(
+  input: Parameters<typeof publishBlock>[0] & { allowEstimated?: boolean },
+): string | null {
+  if (input.distanceSource === "estimated" && input.allowEstimated) {
+    const quotedAt = input.quotedAt ? new Date(input.quotedAt).getTime() : 0;
+    const now = input.nowMs ?? Date.now();
+    if (!quotedAt || now - quotedAt > QUOTE_TTL_MS) return PRICE_UPDATED;
+    if (input.ratesVersion !== input.expectedRatesVersion) return PRICE_UPDATED;
+    if (input.recomputedTotalCents !== input.savedTotalCents) return PRICE_UPDATED;
+    return null;
+  }
+  const source = input.distanceSource === "demo" ? "maps" : input.distanceSource;
+  const bookable = input.distanceSource === "demo" ? true : input.bookable;
+  return publishBlock({ ...input, distanceSource: source, bookable });
+}
+
+/** Skip the card capture once Stripe has it, or once we recorded it. */
+export function shouldCaptureHold(input: { capturedAt?: string | null; intentStatus?: string | null }): boolean {
+  if (input.capturedAt) return false;
+  const status = String(input.intentStatus ?? "").toLowerCase();
+  if (status === "succeeded" || status === "canceled" || status === "cancelled") return false;
+  return true;
+}
+
+export function invitePushAllowed(
+  row: { status?: string | null; invite_pushed_at?: string | null },
+  nowMs = Date.now(),
+): boolean {
+  if (row.status !== "pending") return false;
+  if (!row.invite_pushed_at) return true;
+  const at = new Date(row.invite_pushed_at).getTime();
+  if (!Number.isFinite(at)) return true;
+  return nowMs - at >= INVITE_PUSH_GAP_MS;
+}
+
+/** Full number only for the lead's current invite. Recent rows get the last 4. Partners get nothing. */
+export function visiblePartnerPhone(input: {
+  callerIsLead: boolean;
+  currentInvite: boolean;
+  phone?: string | null;
+}): string | null {
+  if (!input.callerIsLead) return null;
+  const digits = String(input.phone ?? "").replace(/\D/g, "");
+  if (!digits) return null;
+  if (input.currentInvite) return input.phone ?? digits;
+  return digits.slice(-4);
 }
 
 export function leadJobInProgress(status: string): boolean {

@@ -6,7 +6,7 @@ import { supabase } from "../../../src/lib/supabase";
 import { haptic } from "../../../src/lib/haptics";
 import { C, font, OutlineButton, PrimaryButton } from "../../../src/components/v2";
 
-type InviteRow = { id: string; status: string; lead?: { display_name?: string } | null };
+type InviteRow = { id: string; status: string; lead_first_name?: string | null };
 
 export default function PartnerInvite() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -17,17 +17,13 @@ export default function PartnerInvite() {
   const invite = useQuery({
     queryKey: ["partner-invite", id],
     queryFn: async () => {
-      const { data, error: queryError } = await supabase
-        .from("driver_partnerships")
-        .select("id, status, lead:users(display_name)")
-        .eq("id", id)
-        .maybeSingle();
+      const { data, error: queryError } = await supabase.rpc("partnership_detail", { p_id: id });
       if (queryError) throw queryError;
-      return data as InviteRow | null;
+      return (data ?? null) as InviteRow | null;
     },
   });
   const row = invite.data;
-  const lead = row?.lead?.display_name?.split(" ")[0] || "A driver";
+  const lead = row?.lead_first_name?.split(" ")[0] || "A driver";
 
   async function respond(accept: boolean) {
     if (!id) return;

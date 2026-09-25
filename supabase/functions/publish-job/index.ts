@@ -1,12 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { HttpError, json, readJson, serveJson } from "../_shared/http.ts";
 import { notifyJobEvent } from "../_shared/notify.ts";
-import { QuoteError, computeQuote, requiresSecondPerson, type SizeTier } from "../_shared/pricing.ts";
+import { QuoteError, computeQuote, publishBlock, requiresSecondPerson, type SizeTier } from "../_shared/pricing.ts";
 import { loadPickupRates } from "../_shared/rates.ts";
 import { cancelHold, createHold } from "../_shared/stripe.ts";
 import { requireUser } from "../_shared/supabase.ts";
 
-const QUOTE_TTL_MS = 60 * 60 * 1000;
 const UPDATED = "Your price was updated. Please take a look.";
 
 serveJson(async (req) => {
@@ -40,10 +39,6 @@ serveJson(async (req) => {
       pickupFlights,
       dropoffFlights,
     }) || job.needs_second_person === true;
-  const quotedAt = job.quoted_at ? new Date(job.quoted_at).getTime() : 0;
-  const expired = !quotedAt || Date.now() - quotedAt > QUOTE_TTL_MS;
-  const staleRates = job.rates_version !== rates.ratesVersion;
-  const unbookable = job.distance_source !== "maps";
   let quote;
   try {
     quote = computeQuote(
@@ -66,9 +61,16 @@ serveJson(async (req) => {
     throw err;
   }
   const savedTotal = Number(job.final_cents ?? job.estimate_cents ?? 0);
-  if (expired || staleRates || unbookable || quote.totalCents !== savedTotal || !quote.bookable) {
-    throw new HttpError(409, UPDATED);
-  }
+  const refused = publishBlock({
+    quotedAt: job.quoted_at,
+    ratesVersion: job.rates_version,
+    expectedRatesVersion: rates.ratesVersion,
+    distanceSource: job.distance_source,
+    savedTotalCents: savedTotal,
+    recomputedTotalCents: quote.totalCents,
+    bookable: quote.bookable,
+  });
+  if (refused) throw new HttpError(409, refused);
 
   const paymentIntentId = await createHold(savedTotal, job.id);
   const { data: updated, error: updateError } = await admin
