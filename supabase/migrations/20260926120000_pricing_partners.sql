@@ -266,9 +266,6 @@ begin
   ) then
     return false;
   end if;
-  if j.needs_second_person and public.active_partner(uid) is null then
-    return false;
-  end if;
   return public.vehicle_rank(profile.vehicle_type) >= public.vehicle_rank(j.vehicle_required)
     and profile.service_lat is not null
     and profile.service_lng is not null

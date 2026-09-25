@@ -72,7 +72,6 @@ function driverCanSeeJob(state: DemoState, row: DemoRow, driverId: string): bool
   const profile = state.driver_profiles.find((item) => item.user_id === driverId);
   if (profile?.partner_only === true) return false;
   if (acceptedAsPartner(state, driverId)) return false;
-  if (row.needs_second_person === true && !activePartnership(state, driverId)) return false;
   return true;
 }
 
