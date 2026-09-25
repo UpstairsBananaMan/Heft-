@@ -157,12 +157,13 @@ export default function CustomerHome() {
   const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date()));
   const hello = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
-  const sheetHeight = booking.step === "home" ? Math.round(window.height * [0.5, 0.72, 0.94][snap]) : booking.step === "size" ? undefined : Math.round(window.height * 0.86);
+  const sheetHeight = booking.step === "home" ? Math.round(window.height * [0.5, 0.72, 0.94][snap]) : booking.step === "size" ? Math.round(window.height * 0.7) : Math.round(window.height * 0.66);
+  const mapHeight = Math.max(180, window.height - sheetHeight);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.paper }}>
-      <View style={{ flex: 1 }}>
-        <JobMap pins={pins} />
+      <View style={{ height: mapHeight }}>
+        <JobMap pins={pins} height={mapHeight} />
         <View style={{ position: "absolute", top: 52, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between" }}>
           <View style={{ backgroundColor: C.white, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 }}>
             <Wordmark color={C.ink} size={22} />
