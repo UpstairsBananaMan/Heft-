@@ -1,6 +1,6 @@
 import { VEHICLE_LABEL } from "@heft/shared";
 import { Flash } from "@/components/flash";
-import { setDriverStatus } from "@/lib/actions";
+import { setBackgroundCheck, setDriverStatus } from "@/lib/actions";
 import { requireAdmin } from "@/lib/auth";
 
 export default async function DriversPage({ searchParams }: { searchParams: Promise<{ notice?: string }> }) {
@@ -28,7 +28,8 @@ export default async function DriversPage({ searchParams }: { searchParams: Prom
                 <div>
                   <p className="text-lg font-semibold">{user?.display_name ?? "Driver"}</p>
                   <p className="mt-1 text-sm text-steel">
-                    {VEHICLE_LABEL[driver.vehicle_type] ?? driver.vehicle_type} · {driver.status}
+                    {driver.partner_only ? "Partner only" : VEHICLE_LABEL[driver.vehicle_type] ?? driver.vehicle_type} · {driver.status}
+                    {driver.background_check_at ? " · background check done" : ""}
                     {driver.is_online ? " · online" : " · offline"}
                   </p>
                   <p className="mt-1 text-sm text-steel">
@@ -63,6 +64,13 @@ export default async function DriversPage({ searchParams }: { searchParams: Prom
                       </button>
                     </form>
                   )}
+                  <form action={setBackgroundCheck}>
+                    <input type="hidden" name="user_id" value={driver.user_id} />
+                    <input type="hidden" name="done" value={driver.background_check_at ? "0" : "1"} />
+                    <button className="h-10 border border-charcoal px-4 text-sm font-semibold" type="submit">
+                      {driver.background_check_at ? "Clear background check" : "Background check done"}
+                    </button>
+                  </form>
                 </div>
               </div>
             </li>

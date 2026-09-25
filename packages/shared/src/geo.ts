@@ -17,8 +17,18 @@ export function serviceAreaHint(address?: string): string {
   return `${APP_NAME} only serves the Pensacola area right now.`;
 }
 
+function cityLabel(address: string): string | null {
+  const parts = address.split(",").map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  const raw = parts[parts.length - 2].replace(/\s+[A-Z]{2}$/, "").replace(/\s+\d{5}(?:-\d{4})?$/, "").trim();
+  if (!raw || /^\d/.test(raw)) return null;
+  return raw;
+}
+
 /** Neighbourhood label for a stored address. Never returns coordinates. */
 export function neighbourhood(address: string): string {
+  const city = cityLabel(address);
+  if (city && !/pensacola/i.test(city)) return city;
   const value = address.toLowerCase();
   if (value.includes("gadsden")) return "East Hill";
   if (value.includes("9th")) return "Cordova";

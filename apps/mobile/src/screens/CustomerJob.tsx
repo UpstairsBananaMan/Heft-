@@ -23,6 +23,9 @@ import type { IllustrationName } from "../illustrations/markup";
 
 type Card = {
   display_name: string;
+  partner_display_name?: string | null;
+  partner_first_name?: string | null;
+  partner_approved?: boolean;
   phone: string | null;
   avatar_url: string | null;
   rating_avg: number;
@@ -191,7 +194,9 @@ export default function CustomerJob() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Text style={{ fontFamily: font.semi, fontSize: 17 }}>{person.display_name}</Text>
+                    <Text style={{ fontFamily: font.semi, fontSize: 17 }}>
+                      {person.partner_first_name ? `${person.display_name.split(" ")[0]} and ${person.partner_first_name}` : person.display_name}
+                    </Text>
                     <View style={{ backgroundColor: C.sand150, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 }}>
                       <Text style={{ fontFamily: font.medium, fontSize: 12, color: C.steel }}>
                         {showStarRating(Number(person.rating_count)) ? `★ ${driverRatingLabel(Number(person.rating_count), person.rating_avg)}` : driverRatingLabel(Number(person.rating_count), person.rating_avg)}
@@ -199,6 +204,12 @@ export default function CustomerJob() {
                     </View>
                   </View>
                   {person.approved_documents ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                      <BadgeCheck color={C.green} size={15} />
+                      <Text style={{ color: C.green, fontFamily: font.semi, fontSize: 14 }}>{approvedByLabel()}</Text>
+                    </View>
+                  ) : null}
+                  {person.partner_approved ? (
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
                       <BadgeCheck color={C.green} size={15} />
                       <Text style={{ color: C.green, fontFamily: font.semi, fontSize: 14 }}>{approvedByLabel()}</Text>

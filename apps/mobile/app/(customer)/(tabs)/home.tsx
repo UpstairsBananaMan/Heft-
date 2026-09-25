@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import {
@@ -20,15 +20,24 @@ import {
   ITEM_LABEL,
   type QuoteLine,
   PENSACOLA_CENTER,
+  customerLines,
+  defaultSize,
   driversApprovedLabel,
+  DISTANCE_UNAVAILABLE,
+  billableMiles,
+  computeQuote,
+  estimateJobMinutes,
   formatUsd,
-  haversineMiles,
   neighbourhood,
   pickVehicle,
+  requiresSecondPerson,
+  wontTakeItem,
+  WONT_TAKE_COPY,
   type FeedPost,
   type Job,
   type PlacePreset,
   type SizeCategory,
+  type SizeTier,
 } from "@heft/shared";
 import { JobMap, type MapPin } from "../../../src/components/JobMap";
 import { DroppingIllustration, Illustration } from "../../../src/components/Illustration";
@@ -43,8 +52,8 @@ import { useBooking } from "../../../src/store/booking";
 import { useSession } from "../../../src/store/session";
 
 const RECENTS: PlacePreset[] = [
-  { label: "Home", address: "1200 E Gadsden St, Pensacola", lat: 30.436, lng: -87.191 },
-  { label: "412 N Spring St", address: "North Hill, Pensacola", lat: 30.4165, lng: -87.221 },
+  { label: "Home", address: "1200 E Gadsden St, Pensacola", lat: 30.436, lng: -87.191, zip: "32503" },
+  { label: "412 N Spring St", address: "North Hill, Pensacola", lat: 30.4165, lng: -87.221, zip: "32501" },
 ];
 
 const ITEMS = [
@@ -57,11 +66,27 @@ const ITEMS = [
 ] as const;
 
 const SIZES: { id: SizeCategory; name: string; example: string; bars: number }[] = [
-  { id: "small", name: "Small", example: "Chair", bars: 1 },
-  { id: "medium", name: "Medium", example: "Loveseat", bars: 2 },
-  { id: "large", name: "Large", example: "3-seat sofa", bars: 3 },
-  { id: "xl", name: "Extra large", example: "Sectional", bars: 4 },
+  { id: "small", name: "Small", example: "chair, TV, boxes", bars: 1 },
+  { id: "medium", name: "Medium", example: "couch, dresser, mattress", bars: 2 },
+  { id: "large", name: "Large", example: "fridge, washer, sectional", bars: 3 },
+  { id: "xl", name: "XL", example: "3–6 bulky items", bars: 4 },
+  { id: "truckload", name: "Truckload", example: "a room's worth", bars: 5 },
 ];
+
+const COUCH_CHIPS = [
+  { id: "couch", label: "Couch" },
+  { id: "couch_sectional", label: "Sectional" },
+  { id: "couch_sleeper", label: "Sleeper sofa" },
+] as const;
+
+const APPLIANCE_CHIPS = [
+  { id: "appliance_fridge", label: "Fridge" },
+  { id: "appliance_washer", label: "Washer" },
+  { id: "appliance_dryer", label: "Dryer" },
+  { id: "appliance_washer_dryer", label: "Washer + dryer" },
+  { id: "appliance_stove", label: "Stove" },
+  { id: "appliance_other", label: "Other appliance" },
+] as const;
 
 export default function CustomerHome() {
   const router = useRouter();
@@ -88,15 +113,18 @@ export default function CustomerHome() {
   if (booking.dropoff) pins.push({ id: "dropoff", lat: booking.dropoff.lat, lng: booking.dropoff.lng, title: "Drop-off", kind: "dropoff" });
 
   function pickIdea(tile: IdeaTile) {
+    const size = tile.size ?? defaultSize(tile.itemType);
     booking.patch({
       itemType: tile.itemType,
       itemDescription: tile.description,
-      size: tile.size ?? null,
+      size,
       presetItem: true,
       suggestHardware: Boolean(tile.hardware),
-      skipAfterAddress: tile.size ? "price" : "size",
-      stairs: false,
-      needsHelper: false,
+      skipAfterAddress: size ? "price" : "size",
+      stairsPickupFlights: 0,
+      stairsDropoffFlights: 0,
+      needsSecondPerson: requiresSecondPerson({ itemType: tile.itemType, size: tile.size ?? defaultSize(tile.itemType) }),
+      weightBand: null,
       dropoffPlacement: "inside",
       lines: null,
       totalCents: null,
@@ -112,8 +140,10 @@ export default function CustomerHome() {
       presetItem: true,
       suggestHardware: false,
       skipAfterAddress: "price",
-      stairs: false,
-      needsHelper: false,
+      stairsPickupFlights: 0,
+      stairsDropoffFlights: 0,
+      needsSecondPerson: requiresSecondPerson({ itemType: post.item_type, size: post.size_category }),
+      weightBand: null,
       dropoffPlacement: "inside",
       lines: null,
       totalCents: null,
@@ -127,12 +157,13 @@ export default function CustomerHome() {
   const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date()));
   const hello = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
-  const sheetHeight = booking.step === "home" ? Math.round(window.height * [0.5, 0.72, 0.94][snap]) : booking.step === "size" ? undefined : Math.round(window.height * 0.86);
+  const sheetHeight = booking.step === "home" ? Math.round(window.height * [0.5, 0.72, 0.94][snap]) : booking.step === "size" ? Math.round(window.height * 0.7) : Math.round(window.height * 0.66);
+  const mapHeight = Math.max(180, window.height - sheetHeight);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.paper }}>
-      <View style={{ flex: 1 }}>
-        <JobMap pins={pins} />
+      <View style={{ height: mapHeight }}>
+        <JobMap pins={pins} height={mapHeight} />
         <View style={{ position: "absolute", top: 52, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between" }}>
           <View style={{ backgroundColor: C.white, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 }}>
             <Wordmark color={C.ink} size={22} />
@@ -163,10 +194,12 @@ export default function CustomerHome() {
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: font.semi, fontSize: 14, color: C.ink }}>{short(booking.pickup.address)}</Text>
               <Text style={{ fontFamily: font.semi, fontSize: 14, color: C.ink }}>{short(booking.dropoff.address)}</Text>
+              {booking.trip ? (
+                <Text style={{ textAlign: "center", fontFamily: font.medium, color: C.steel, fontSize: 14, marginTop: 4 }}>
+                  {billableMiles(booking.trip.roadMiles)} mi
+                </Text>
+              ) : null}
             </View>
-            <Text style={{ fontFamily: font.medium, color: C.steel, fontSize: 14 }}>
-              {haversineMiles(booking.pickup.lat, booking.pickup.lng, booking.dropoff.lat, booking.dropoff.lng).toFixed(1)} mi
-            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -213,7 +246,7 @@ export default function CustomerHome() {
                       onPress={() => {
                         booking.setDropoff(place);
                         if (!booking.pickup) {
-                          booking.setPickup({ label: "Current location", address: "1200 E Gadsden St", lat: 30.436, lng: -87.191 });
+                          booking.setPickup({ label: "Current location", address: "1200 E Gadsden St", lat: 30.436, lng: -87.191, zip: "32503" });
                         }
                         router.push("/(customer)/where");
                       }}
@@ -267,8 +300,44 @@ const floatBtn = {
 
 function ItemStep({ onPrice, sizeOnly }: { onPrice: () => void; sizeOnly?: boolean }) {
   const booking = useBooking();
-  const ready = Boolean(booking.itemType && booking.size && (booking.itemType !== "other" || booking.itemDescription.trim().length > 1));
+  const [tint, setTint] = useState(false);
+  const family = booking.itemType?.startsWith("couch") ? "couch" : booking.itemType?.startsWith("appliance") ? "appliance" : booking.itemType;
+  const chips = family === "couch" ? COUCH_CHIPS : family === "appliance" ? APPLIANCE_CHIPS : [];
+  const chipChosen = chips.length === 0 || chips.some((chip) => chip.id === booking.itemType);
+  const locked = requiresSecondPerson({
+    itemType: booking.itemType,
+    size: booking.size,
+    weightBand: booking.weightBand,
+    pickupFlights: booking.stairsPickupFlights,
+    dropoffFlights: booking.stairsDropoffFlights,
+  });
+  const refused =
+    booking.itemType === "other" &&
+    (booking.weightBand === "over_300" || wontTakeItem(booking.itemDescription, booking.weightBand));
+  const described = booking.itemType !== "other" || (booking.itemDescription.trim().length > 1 && Boolean(booking.weightBand) && booking.weightBand !== "over_300");
+  const ready = Boolean(booking.itemType && booking.size && chipChosen && described && !refused);
   const label = !booking.itemType ? "Choose an item" : !booking.size ? "Choose a size" : "See price";
+  const flights = booking.stairsPickupFlights + booking.stairsDropoffFlights;
+  const stairLabel =
+    flights === 0
+      ? "Stairs: None"
+      : `Stairs: ${booking.stairsPickupFlights} at pickup, ${booking.stairsDropoffFlights} at drop-off`;
+  const preview = previewQuote(booking);
+  function applyType(itemType: string) {
+    const size = defaultSize(itemType) ?? booking.size;
+    booking.patch({
+      itemType,
+      size,
+      itemDescription: itemType === "other" ? booking.itemDescription : ITEM_LABEL[itemType] ?? booking.itemDescription,
+      needsSecondPerson: requiresSecondPerson({
+        itemType,
+        size,
+        weightBand: booking.weightBand,
+        pickupFlights: booking.stairsPickupFlights,
+        dropoffFlights: booking.stairsDropoffFlights,
+      }),
+    });
+  }
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 12 }}>
       {sizeOnly ? null : <Text style={{ color: C.steel, fontFamily: font.medium, fontSize: 14 }}>Step 2 of 3 · Item</Text>}
@@ -291,10 +360,7 @@ function ItemStep({ onPrice, sizeOnly }: { onPrice: () => void; sizeOnly?: boole
               accessibilityState={{ selected }}
               onPress={() => {
                 haptic.select();
-                booking.patch({
-                  itemType: item.id,
-                  itemDescription: item.id === "other" ? booking.itemDescription : ITEM_LABEL[item.id],
-                });
+                applyType(item.id);
               }}
               style={{
                 width: "31%",
@@ -319,15 +385,58 @@ function ItemStep({ onPrice, sizeOnly }: { onPrice: () => void; sizeOnly?: boole
           );
         })}
       </View>}
+      {chips.length > 0 && !sizeOnly ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+          {chips.map((chip) => {
+            const selected = booking.itemType === chip.id;
+            return (
+              <Pressable
+                key={chip.id}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                onPress={() => {
+                  haptic.select();
+                  applyType(chip.id);
+                }}
+                style={{ minHeight: 44, paddingHorizontal: 12, borderRadius: 999, borderWidth: selected ? 2 : 1, borderColor: selected ? C.ink : C.sand200, backgroundColor: selected ? C.amber50 : C.white, justifyContent: "center" }}
+              >
+                <Text style={{ fontFamily: font.semi, fontSize: 14 }}>{chip.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
       {booking.itemType === "other" && !sizeOnly ? (
-        <TextInput
-          accessibilityLabel="What is it?"
-          value={booking.itemDescription}
-          onChangeText={(itemDescription) => booking.patch({ itemDescription: itemDescription.slice(0, 40) })}
-          placeholder="What is it?"
-          placeholderTextColor={C.steel500}
-          style={{ marginTop: 12, minHeight: 56, borderRadius: 14, borderWidth: 1, borderColor: C.sand600, paddingHorizontal: 12, fontSize: 16, fontFamily: font.body }}
-        />
+        <View>
+          <TextInput
+            accessibilityLabel="What is it?"
+            value={booking.itemDescription}
+            onChangeText={(itemDescription) => booking.patch({ itemDescription: itemDescription.slice(0, 40) })}
+            placeholder="What is it?"
+            placeholderTextColor={C.steel500}
+            style={{ marginTop: 12, minHeight: 56, borderRadius: 14, borderWidth: 1, borderColor: C.sand600, paddingHorizontal: 12, fontSize: 16, fontFamily: font.body }}
+          />
+          <Text style={{ marginTop: 12, fontFamily: font.semi, fontSize: 16 }}>How heavy is it?</Text>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+            {[
+              { id: "under_150" as const, label: "Under 150 lb" },
+              { id: "150_300" as const, label: "150–300 lb" },
+              { id: "over_300" as const, label: "Over 300 lb" },
+            ].map((band) => (
+              <Pressable key={band.id} accessibilityRole="radio" accessibilityState={{ selected: booking.weightBand === band.id }} onPress={() => booking.patch({ weightBand: band.id })} style={{ flex: 1, minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: booking.weightBand === band.id ? C.ink : C.sand200, alignItems: "center", justifyContent: "center", padding: 6 }}>
+                <Text style={{ fontFamily: font.semi, fontSize: 13, textAlign: "center" }}>{band.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {refused ? (
+            <View style={{ marginTop: 12 }}>
+              <Text style={{ fontFamily: font.body, fontSize: 16 }}>{WONT_TAKE_COPY}</Text>
+              <Pressable accessibilityRole="button" onPress={() => booking.patch({ itemType: null, itemDescription: "", weightBand: null, size: null })} style={{ minHeight: 44, justifyContent: "center" }}>
+                <Text style={{ fontFamily: font.semi, fontSize: 16, textDecorationLine: "underline" }}>Choose something else</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
       ) : null}
       {sizeOnly ? null : <Text style={{ marginTop: 18, marginBottom: 8, fontFamily: font.heading, fontSize: 18, color: C.ink }}>How big is it?</Text>}
       <View style={{ flexDirection: "row", gap: 8 }}>
@@ -340,7 +449,16 @@ function ItemStep({ onPrice, sizeOnly }: { onPrice: () => void; sizeOnly?: boole
               accessibilityState={{ selected }}
               onPress={() => {
                 haptic.select();
-                booking.patch({ size: size.id });
+                booking.patch({
+                  size: size.id,
+                  needsSecondPerson: requiresSecondPerson({
+                    itemType: booking.itemType,
+                    size: size.id,
+                    weightBand: booking.weightBand,
+                    pickupFlights: booking.stairsPickupFlights,
+                    dropoffFlights: booking.stairsDropoffFlights,
+                  }) || booking.needsSecondPerson,
+                });
                 if (sizeOnly) onPrice();
               }}
               style={{
@@ -363,37 +481,49 @@ function ItemStep({ onPrice, sizeOnly }: { onPrice: () => void; sizeOnly?: boole
         })}
       </View>
       {sizeOnly ? null : <>
-      <Question
-        title="Stairs at either stop?"
-        value={booking.stairs ? "yes" : "no"}
-        options={[
-          { id: "no", label: "No" },
-          { id: "yes", label: "Yes" },
-        ]}
-        onChange={(value) => booking.patch({ stairs: value === "yes", stairsPickupFlights: value === "yes" ? Math.max(1, booking.stairsPickupFlights) : 0 })}
-      />
-      <Question
-        title="Need a helper to load?"
-        value={booking.needsHelper ? "yes" : "no"}
-        options={[
-          { id: "no", label: "No, I'll help" },
-          { id: "yes", label: "Yes" },
-        ]}
-        onChange={(value) => booking.patch({ needsHelper: value === "yes" })}
-      />
-      <Question
-        title="At drop-off"
-        value={booking.dropoffPlacement}
-        options={[
-          { id: "inside", label: "Inside" },
-          { id: "curbside", label: "Curbside" },
-        ]}
-        onChange={(value) => booking.patch({ dropoffPlacement: value as "inside" | "curbside" })}
-        />
+      <Pressable accessibilityRole="button" accessibilityLabel={stairLabel} onPress={() => booking.patch({ stairsOpen: !booking.stairsOpen })} style={{ marginTop: 16, minHeight: 48, justifyContent: "center" }}>
+        <Text style={{ fontFamily: font.semi, fontSize: 16 }}>{stairLabel} ›</Text>
+      </Pressable>
+      {booking.stairsOpen ? (
+        <View>
+          <FlightCounter label="Pickup flights" value={booking.stairsPickupFlights} onChange={(stairsPickupFlights) => booking.patch({ stairsPickupFlights })} />
+          <FlightCounter label="Drop-off flights" value={booking.stairsDropoffFlights} onChange={(stairsDropoffFlights) => booking.patch({ stairsDropoffFlights })} />
+        </View>
+      ) : null}
+      <View style={{ marginTop: 16, borderRadius: 14, padding: 12, backgroundColor: tint ? C.amber50 : "transparent" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 }}>
+          <Text style={{ fontFamily: font.semi, fontSize: 16 }}>Add a second person</Text>
+          <Switch
+            accessibilityLabel="Add a second person"
+            value={locked || booking.needsSecondPerson}
+            onValueChange={(value) => {
+              if (locked) {
+                haptic.light();
+                setTint(true);
+                setTimeout(() => setTint(false), 400);
+                return;
+              }
+              haptic.select();
+              booking.patch({ needsSecondPerson: value });
+            }}
+            trackColor={{ true: C.green, false: C.sand300 }}
+          />
+        </View>
+        {locked ? <Text style={{ fontFamily: font.body, fontSize: 14, color: C.steel }}>This needs 2 people, so it's included in your price</Text> : null}
+      </View>
+      <Text style={{ marginTop: 16, fontFamily: font.semi, fontSize: 16 }}>Drop-off</Text>
+      <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+        {(["inside", "curbside"] as const).map((place) => (
+          <Pressable key={place} accessibilityRole="radio" accessibilityState={{ selected: booking.dropoffPlacement === place }} onPress={() => { haptic.select(); booking.patch({ dropoffPlacement: place }); }} style={{ flex: 1, minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: booking.dropoffPlacement === place ? C.ink : C.sand200, alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ fontFamily: font.semi, fontSize: 16 }}>{place === "inside" ? "Inside" : "Curbside"}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {preview ? <Text style={{ marginTop: 16, fontFamily: font.heading, fontSize: 22 }}>{formatUsd(preview.totalCents)}</Text> : booking.trip ? null : <View style={{ marginTop: 16, height: 28, width: 120, borderRadius: 8, backgroundColor: C.sand150 }} />}
       <View style={{ marginTop: 16 }}>
         <PrimaryButton
-          label={label}
-          disabled={!ready}
+          label={booking.trip ? label : "Getting your price…"}
+          disabled={!ready || !booking.trip}
           onPress={() => {
             haptic.medium();
             onPrice();
@@ -405,39 +535,73 @@ function ItemStep({ onPrice, sizeOnly }: { onPrice: () => void; sizeOnly?: boole
   );
 }
 
-function Question({
-  title,
-  value,
-  options,
-  onChange,
-}: {
-  title: string;
-  value: string;
-  options: { id: string; label: string }[];
-  onChange: (value: string) => void;
-}) {
+function FlightCounter({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+  function step(next: number) {
+    if (next < 0 || next > 6 || next === value) return;
+    haptic.select();
+    onChange(next);
+  }
   return (
-    <View style={{ marginTop: 16 }}>
-      <Text style={{ fontFamily: font.semi, fontSize: 16, color: C.ink, marginBottom: 8 }}>{title}</Text>
-      <View style={{ flexDirection: "row", backgroundColor: C.sand150, borderRadius: 12, padding: 3 }}>
-        {options.map((option) => {
-          const selected = option.id === value;
-          return (
-            <Pressable
-              key={option.id}
-              onPress={() => {
-                haptic.select();
-                onChange(option.id);
-              }}
-              style={{ flex: 1, minHeight: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: selected ? C.white : "transparent" }}
-            >
-              <Text style={{ fontFamily: font.semi, fontSize: 14, color: C.ink }}>{option.label}</Text>
-            </Pressable>
-          );
-        })}
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 48 }}>
+      <Text style={{ fontFamily: font.body, fontSize: 16 }}>{label}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Pressable accessibilityLabel={`Fewer ${label}`} onPress={() => step(value - 1)} style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: C.sand150, opacity: value === 0 ? 0.4 : 1 }}>
+          <Text style={{ fontSize: 22 }}>–</Text>
+        </Pressable>
+        <Text style={{ width: 24, textAlign: "center", fontFamily: font.semi, fontSize: 16 }}>{value}</Text>
+        <Pressable accessibilityLabel={`More ${label}`} onPress={() => step(value + 1)} style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: C.sand150, opacity: value === 6 ? 0.4 : 1 }}>
+          <Text style={{ fontSize: 22 }}>+</Text>
+        </Pressable>
       </View>
     </View>
   );
+}
+
+function previewQuote(booking: {
+  trip: { roadMiles: number; pickupInZone: boolean; dropoffInZone: boolean } | null;
+  size: SizeCategory | null;
+  itemType: string | null;
+  weightBand: string | null;
+  stairsPickupFlights: number;
+  stairsDropoffFlights: number;
+  needsSecondPerson: boolean;
+}) {
+  if (!booking.trip || !booking.size) return null;
+  const tier = booking.size as SizeTier;
+  const second =
+    requiresSecondPerson({
+      itemType: booking.itemType,
+      size: booking.size,
+      weightBand: booking.weightBand,
+      pickupFlights: booking.stairsPickupFlights,
+      dropoffFlights: booking.stairsDropoffFlights,
+    }) || booking.needsSecondPerson;
+  const minutes = estimateJobMinutes({
+    roadMiles: booking.trip.roadMiles,
+    pickupInZone: booking.trip.pickupInZone,
+    dropoffInZone: booking.trip.dropoffInZone,
+    sizeTier: tier,
+    pickupFlights: booking.stairsPickupFlights,
+    dropoffFlights: booking.stairsDropoffFlights,
+  });
+  return computeQuote({
+    sizeTier: tier,
+    roadMiles: booking.trip.roadMiles,
+    distanceSource: "maps",
+    pickupInZone: booking.trip.pickupInZone,
+    dropoffInZone: booking.trip.dropoffInZone,
+    pickupFlights: booking.stairsPickupFlights,
+    dropoffFlights: booking.stairsDropoffFlights,
+    secondPerson: second,
+    estJobHours: minutes / 60,
+    vehicleType: "pickup",
+  });
+}
+
+function quoteErrorText(err: unknown): string {
+  const message = errorText(err);
+  if (message === "distance_unavailable" || message === DISTANCE_UNAVAILABLE) return DISTANCE_UNAVAILABLE;
+  return message;
 }
 
 function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
@@ -445,8 +609,12 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
   const booking = useBooking();
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [updated, setUpdated] = useState(false);
+  const [bookHold, setBookHold] = useState(false);
   const [rowsOn, setRowsOn] = useState(false);
   const [bookOn, setBookOn] = useState(false);
+  const estimated = booking.distanceSource === "estimated" || booking.trip?.distanceSource === "estimated";
+  const canBook = Boolean(booking.totalCents) && (!estimated || demoMode);
   const delight = useDelight({
     jobId: booking.jobId,
     moment: "price",
@@ -476,9 +644,10 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
           item_type: booking.itemType,
           size_category: booking.size,
           vehicle_required: vehicle,
-          stairs_pickup_flights: booking.stairs ? booking.stairsPickupFlights : 0,
-          stairs_dropoff_flights: booking.stairs ? booking.stairsDropoffFlights : 0,
-          needs_helper: booking.needsHelper,
+          stairs_pickup_flights: booking.stairsPickupFlights,
+          stairs_dropoff_flights: booking.stairsDropoffFlights,
+          weight_band: booking.weightBand,
+          size_tier: booking.size,
           dropoff_placement: booking.dropoffPlacement,
         };
         let id = booking.jobId;
@@ -491,11 +660,17 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
           const { error: updateError } = await supabase.from("jobs").update(payload).eq("id", id);
           if (updateError) throw updateError;
         }
-        const quoted = await invoke<{ lines: QuoteLine[]; total_cents: number; distance_miles: number }>("quote", { job_id: id });
+        const quoted = await invoke<{ lines: QuoteLine[]; total_cents: number; distance_miles: number; distance_source?: "maps" | "demo" | "estimated"; distance_label?: string }>("quote", { job_id: id });
         if (cancel) return;
-        booking.patch({ lines: quoted.lines, totalCents: quoted.total_cents, miles: quoted.distance_miles });
+        booking.patch({
+          lines: quoted.lines,
+          totalCents: quoted.total_cents,
+          miles: quoted.distance_miles,
+          distanceSource: quoted.distance_source ?? booking.trip?.distanceSource ?? null,
+          distanceLabel: quoted.distance_label ?? booking.trip?.distanceLabel ?? null,
+        });
       } catch (err) {
-        if (!cancel) setError(errorText(err));
+        if (!cancel) setError(quoteErrorText(err));
       } finally {
         if (!cancel) setPending(false);
       }
@@ -506,7 +681,7 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
     };
     // Quote when the priced answers change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [booking.itemType, booking.size, booking.stairs, booking.needsHelper, booking.pickup?.address, booking.dropoff?.address, profile?.id]);
+  }, [booking.itemType, booking.size, booking.stairsPickupFlights, booking.stairsDropoffFlights, booking.needsSecondPerson, booking.weightBand, booking.pickup?.address, booking.dropoff?.address, profile?.id]);
 
   useEffect(() => {
     if (!booking.totalCents) return;
@@ -536,8 +711,26 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
       booking.reset();
       onBooked(id);
     } catch (err) {
-      setError(errorText(err));
-      haptic.error();
+      const message = errorText(err);
+      if (message.includes("updated")) {
+        setUpdated(true);
+        setBookHold(true);
+        haptic.warning();
+        const quoted = await invoke<{ lines: QuoteLine[]; total_cents: number; distance_miles: number; distance_source?: "maps" | "demo" | "estimated"; distance_label?: string }>("quote", { job_id: booking.jobId });
+        booking.patch({
+          lines: quoted.lines,
+          totalCents: quoted.total_cents,
+          miles: quoted.distance_miles,
+          distanceSource: quoted.distance_source ?? null,
+          distanceLabel: quoted.distance_label ?? null,
+        });
+        setError("Your price was updated. Please take a look.");
+        setTimeout(() => setUpdated(false), 2000);
+        setTimeout(() => setBookHold(false), 600);
+      } else {
+        setError(quoteErrorText(err));
+        haptic.error();
+      }
     } finally {
       setPending(false);
     }
@@ -547,7 +740,7 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
   const reveal = Boolean(booking.totalCents) && (delight.playing || delight.settled);
   return (
     <View style={{ flex: 1 }}>
-    <ScrollView contentContainerStyle={{ paddingBottom: 16 }}>
+    <ScrollView contentContainerStyle={{ paddingBottom: 96 }}>
       <Text style={{ fontFamily: font.heading, fontSize: 22, color: C.ink }}>Your price</Text>
       <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 14, marginBottom: 12 }}>{route}</Text>
       <View style={{ backgroundColor: C.white, borderRadius: 18, borderWidth: 1, borderColor: C.sand200, padding: 16 }}>
@@ -555,16 +748,18 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
         {reveal && !error ? <DroppingIllustration play={delight.playing && !delight.reduced} size={72} /> : null}
         <Text style={{ color: C.steel, fontFamily: font.medium, fontSize: 14 }}>All-in price</Text>
         {booking.totalCents ? (
-          <CountUp cents={booking.totalCents} play={delight.playing && !delight.reduced} />
+          <CountUp cents={booking.totalCents} play={(delight.playing || updated) && !delight.reduced} />
         ) : (
           <Text style={{ fontFamily: font.display, fontSize: 44, color: C.ink }}>{pending ? "…" : ""}</Text>
         )}
-        {rowsOn ? (booking.lines ?? []).map((line) => (
-          <View key={line.key} style={{ flexDirection: "row", justifyContent: "space-between", minHeight: 30 }}>
+        {rowsOn ? customerLines(booking.lines ?? []).map((line) => (
+          <View key={line.key} style={{ flexDirection: "row", justifyContent: "space-between", minHeight: 30, backgroundColor: updated ? C.amber50 : "transparent" }}>
             <Text style={{ fontFamily: font.body, fontSize: 16, color: C.ink }}>{line.label}</Text>
-            <Text style={{ fontFamily: font.semi, fontSize: 16, color: C.ink }}>{line.key === "base_miles" ? formatUsd(line.cents) : `+ ${formatUsd(line.cents)}`}</Text>
+            <Text style={{ fontFamily: font.semi, fontSize: 16, color: C.ink }}>{line.key === "base" ? formatUsd(line.cents) : `+ ${formatUsd(line.cents)}`}</Text>
           </View>
-        )) : null}
+        )) : booking.trip ? (
+          <View style={{ height: 28, borderRadius: 8, backgroundColor: C.sand150, marginTop: 8 }} />
+        ) : null}
         <View style={{ height: 1, backgroundColor: C.sand200, marginVertical: 8 }} />
         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
           <Text style={{ fontFamily: font.bold, fontSize: 16 }}>Total</Text>
@@ -581,11 +776,16 @@ function PriceStep({ onBooked }: { onBooked: (id: string) => void }) {
       </Pressable>
       {error ? <Text style={{ color: C.red, fontFamily: font.body, fontSize: 14, marginBottom: 8 }}>{error}</Text> : null}
       <View style={{ alignItems: "center", marginBottom: 8 }}>
-        <Text style={{ color: C.green, fontFamily: font.semi, fontSize: 14 }}>All-in price, set before you book</Text>
+        <Text accessibilityLiveRegion="polite" style={{ color: C.green, fontFamily: font.semi, fontSize: 14 }}>
+          {updated && booking.totalCents ? `Price updated to ${formatUsd(booking.totalCents)}` : "All-in price, set before you book."}
+        </Text>
         <Text style={{ color: C.green, fontFamily: font.semi, fontSize: 14 }}>{driversApprovedLabel()}</Text>
+        {demoMode && booking.distanceLabel ? (
+          <Text style={{ color: C.steel, fontFamily: font.body, fontSize: 13, marginTop: 4, textAlign: "center" }}>{booking.distanceLabel}</Text>
+        ) : null}
       </View>
-      <View pointerEvents={bookOn && !delight.locked ? "auto" : "none"} style={{ opacity: bookOn ? 1 : 0 }}>
-        <PrimaryButton label={pending ? "Getting your price…" : `Book for ${formatUsd(booking.totalCents)}`} disabled={pending || !booking.totalCents || delight.locked} onPress={() => void book()} />
+      <View pointerEvents={bookOn && !delight.locked && canBook ? "auto" : "none"} style={{ opacity: bookOn && canBook ? 1 : 0 }}>
+        <PrimaryButton label={pending ? "Getting your price…" : `Book for ${formatUsd(booking.totalCents)}`} disabled={pending || !booking.totalCents || delight.locked || bookHold || !canBook} onPress={() => void book()} />
       </View>
       <Text style={{ textAlign: "center", marginTop: 8, fontFamily: font.body, fontSize: 14, color: C.steel }}>You're charged after delivery.</Text>
       <Text style={{ textAlign: "center", marginTop: 4, fontFamily: font.body, fontSize: 13, color: C.steel }}>

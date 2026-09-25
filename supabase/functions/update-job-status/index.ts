@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { HttpError, json, readJson, serveJson } from "../_shared/http.ts";
 import { notifyJobEvent } from "../_shared/notify.ts";
+import { twoPersonProgressBlock } from "../_shared/pricing.ts";
 import { transitionAllowed } from "../_shared/status.ts";
 import { cancelHold } from "../_shared/stripe.ts";
 import { requireUser } from "../_shared/supabase.ts";
@@ -30,6 +31,8 @@ serveJson(async (req) => {
   if (next === "cancelled" && cancelReason.length < 3) {
     throw new HttpError(400, "A cancel reason is required");
   }
+  const partnerBlock = twoPersonProgressBlock(job, next);
+  if (partnerBlock) throw new HttpError(409, partnerBlock);
   if (next === "delivered") {
     const { count } = await admin
       .from("job_photos")

@@ -18,11 +18,12 @@ export default async function JobDetailPage({
   const { notice } = await searchParams;
   const { data: job } = await gate.supabase
     .from("jobs")
-    .select("*, customer:users!jobs_customer_id_fkey(display_name, phone), driver:users!jobs_driver_id_fkey(display_name, phone)")
+    .select("*, customer:users!jobs_customer_id_fkey(display_name, phone), driver:users!jobs_driver_id_fkey(display_name, phone), partner:users!jobs_partner_driver_id_fkey(display_name)")
     .eq("id", id)
     .maybeSingle();
   if (!job) notFound();
 
+  const { data: payouts } = await gate.supabase.from("payouts").select("*").eq("job_id", id);
   const { data: events } = await gate.supabase
     .from("job_events")
     .select("*")
@@ -44,6 +45,7 @@ export default async function JobDetailPage({
   const { data: feedPosts } = await gate.supabase.from("feed_posts").select("*").eq("job_id", id);
   const customer = Array.isArray(job.customer) ? job.customer[0] : job.customer;
   const driver = Array.isArray(job.driver) ? job.driver[0] : job.driver;
+  const partner = Array.isArray(job.partner) ? job.partner[0] : job.partner;
 
   return (
     <main className="max-w-4xl">
@@ -71,13 +73,29 @@ export default async function JobDetailPage({
           <dd className="mt-1 text-sm">{driver?.display_name ?? "Unassigned"}</dd>
         </div>
         <div>
+          <dt className="text-xs uppercase tracking-wider text-steel">Partner</dt>
+          <dd className="mt-1 text-sm">{partner?.display_name ?? "None"}</dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase tracking-wider text-steel">Second person / flights / distance</dt>
+          <dd className="mt-1 text-sm">
+            {job.needs_second_person ? "2-person" : "One person"} · {job.stairs_pickup_flights ?? 0} pickup / {job.stairs_dropoff_flights ?? 0} drop-off · {job.distance_source ?? "—"}
+          </dd>
+        </div>
+        <div>
           <dt className="text-xs uppercase tracking-wider text-steel">Price</dt>
           <dd className="mt-1 font-mono text-sm">{formatUsd(job.final_cents ?? job.estimate_cents)}</dd>
         </div>
         <div>
           <dt className="text-xs uppercase tracking-wider text-steel">Platform fee / driver payout</dt>
           <dd className="mt-1 font-mono text-sm">
-            {formatUsd(job.platform_fee_cents)} / {formatUsd(job.driver_payout_cents)}
+            {formatUsd(job.platform_fee_cents)} / lead {formatUsd(job.lead_payout_cents ?? job.driver_payout_cents)} / partner {formatUsd(job.helper_payout_cents)}
+          </dd>
+        </div>
+        <div className="sm:col-span-2">
+          <dt className="text-xs uppercase tracking-wider text-steel">Payouts</dt>
+          <dd className="mt-1 text-sm">
+            {(payouts ?? []).map((payout) => `${payout.role ?? "lead"} ${formatUsd(payout.amount_cents)}`).join(" · ") || "None yet"}
           </dd>
         </div>
         <div className="sm:col-span-2">

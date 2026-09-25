@@ -17,6 +17,10 @@ export type DemoState = {
   device_tokens: DemoRow[];
   driver_documents: DemoRow[];
   feed_posts: DemoRow[];
+  driver_partnerships: DemoRow[];
+  service_zone_zips: DemoRow[];
+  rate_cards: DemoRow[];
+  size_tier_rates: DemoRow[];
 };
 
 export type DemoActor = { id: string; role: Role };

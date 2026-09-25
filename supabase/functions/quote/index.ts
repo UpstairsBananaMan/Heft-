@@ -1,139 +1,192 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { routeMiles } from "../_shared/distance.ts";
+import { postalCode, routeMiles } from "../_shared/distance.ts";
 import { HttpError, json, readJson, serveJson } from "../_shared/http.ts";
-import { inPensacola, quoteLines, splitCents } from "../_shared/pricing.ts";
+import { notifyAdmins } from "../_shared/notify.ts";
+import {
+  DISTANCE_UNAVAILABLE,
+  ESTIMATED_DISTANCE_ALERT,
+  QuoteError,
+  canReuseMapsDistance,
+  computeQuote,
+  coverageDecision,
+  estimateJobMinutes,
+  normalizeZip,
+  requiresSecondPerson,
+  type SizeTier,
+} from "../_shared/pricing.ts";
+import { loadPickupRates } from "../_shared/rates.ts";
 import { requireUser } from "../_shared/supabase.ts";
 
-const SIZES = new Set(["small", "medium", "large", "xl"]);
-const VEHICLES = new Set(["pickup", "cargo_van", "box_truck", "flatbed"]);
+const TIERS = new Set(["small", "medium", "large", "xl", "truckload"]);
 
 serveJson(async (req) => {
   if (req.method !== "POST") return json({ error: "POST required" }, 405);
   const { admin, user } = await requireUser(req);
   const body = await readJson(req);
+  const jobId = typeof body.job_id === "string" ? body.job_id : "";
+  if (!jobId) throw new HttpError(400, "job_id is required");
 
-  let pickupLat: number;
-  let pickupLng: number;
-  let dropoffLat: number;
-  let dropoffLng: number;
-  let size: string;
-  let vehicle: string;
-  let jobId: string | undefined;
+  const { data: job, error } = await admin.from("jobs").select("*").eq("id", jobId).maybeSingle();
+  if (error || !job) throw new HttpError(404, "Job not found");
+  if (job.customer_id !== user.id) throw new HttpError(403, "Only the customer can quote this job");
+  if (!["draft", "priced"].includes(job.status)) throw new HttpError(409, "Only a draft or priced job can be quoted");
 
-  if (typeof body.job_id === "string") {
-    jobId = body.job_id;
-    const { data: job, error } = await admin.from("jobs").select("*").eq("id", jobId).maybeSingle();
-    if (error || !job) throw new HttpError(404, "Job not found");
-    if (job.customer_id !== user.id) throw new HttpError(403, "Only the customer can quote this job");
-    if (!["draft", "priced"].includes(job.status)) {
-      throw new HttpError(409, "Only a draft or priced job can be quoted");
-    }
-    pickupLat = Number(job.pickup_lat);
-    pickupLng = Number(job.pickup_lng);
-    dropoffLat = Number(job.dropoff_lat);
-    dropoffLng = Number(job.dropoff_lng);
-    size = job.size_category;
-    vehicle = job.vehicle_required;
-  } else {
-    pickupLat = Number(body.pickup_lat);
-    pickupLng = Number(body.pickup_lng);
-    dropoffLat = Number(body.dropoff_lat);
-    dropoffLng = Number(body.dropoff_lng);
-    size = String(body.size_category ?? "");
-    vehicle = String(body.vehicle_required ?? "");
-  }
+  const tier = String(job.size_tier ?? job.size_category ?? "");
+  if (!TIERS.has(tier)) throw new HttpError(400, "Size is required");
 
-  if (![pickupLat, pickupLng, dropoffLat, dropoffLng].every(Number.isFinite)) {
-    throw new HttpError(400, "Pickup and drop-off coordinates are required");
-  }
-  if (!SIZES.has(size) || !VEHICLES.has(vehicle)) {
-    throw new HttpError(400, "Size and vehicle are required");
-  }
-  if (!inPensacola(pickupLat, pickupLng) || !inPensacola(dropoffLat, dropoffLng)) {
-    throw new HttpError(422, "Not in service area yet");
-  }
-
-  const distance = await routeMiles(pickupLat, pickupLng, dropoffLat, dropoffLng);
-  const { data: rule, error: ruleError } = await admin
-    .from("pricing_rules")
-    .select("*")
-    .eq("market", "pensacola")
-    .eq("vehicle_type", vehicle)
-    .eq("size_category", size)
-    .eq("active", true)
-    .order("effective_from", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (ruleError || !rule) throw new HttpError(404, "No active pricing rule for this vehicle and size");
-
-  const vehicleLabel: Record<string, string> = {
-    pickup: "Pickup truck",
-    cargo_van: "Cargo van",
-    box_truck: "Box truck",
-    flatbed: "Flatbed",
-  };
-  const sizeLabel: Record<string, string> = {
-    small: "Small",
-    medium: "Medium",
-    large: "Large",
-    xl: "Extra large",
-  };
-  let stairs = false;
-  let helper = false;
-  if (jobId) {
-    const { data: extras } = await admin
-      .from("jobs")
-      .select("stairs_pickup_flights, stairs_dropoff_flights, needs_helper")
-      .eq("id", jobId)
-      .maybeSingle();
-    stairs = Number(extras?.stairs_pickup_flights ?? 0) + Number(extras?.stairs_dropoff_flights ?? 0) > 0;
-    helper = extras?.needs_helper === true;
-  }
-  const breakdown = quoteLines(rule, distance.miles, {
-    stairs,
-    helper,
-    vehicleLabel: vehicleLabel[vehicle] ?? "Pickup truck",
-    sizeLabel: sizeLabel[size] ?? "Medium",
+  const pickupLat = Number(job.pickup_lat);
+  const pickupLng = Number(job.pickup_lng);
+  const dropoffLat = Number(job.dropoff_lat);
+  const dropoffLng = Number(job.dropoff_lng);
+  const pickupZip = normalizeZip(await postalCode(pickupLat, pickupLng));
+  const dropoffZip = normalizeZip(await postalCode(dropoffLat, dropoffLng));
+  const { data: zoneRows } = await admin.from("service_zone_zips").select("zip");
+  const zoneZips = (zoneRows ?? []).map((row: { zip: string }) => String(row.zip));
+  const rates = await loadPickupRates(admin);
+  const zoned = coverageDecision({
+    pickupZip,
+    dropoffZip,
+    roadMiles: 0,
+    zoneZips,
+    maxMiles: rates.maxLoadedMiles,
   });
-  const estimate = breakdown.total_cents;
-  const split = splitCents(estimate);
-  const result = {
-    estimate_cents: estimate,
-    total_cents: estimate,
-    lines: breakdown.lines,
-    distance_miles: distance.miles,
-    distance_source: distance.source,
-    platform_fee_cents: split.platform_fee_cents,
-    driver_payout_cents: split.driver_payout_cents,
-    currency: "usd" as const,
-    job_id: jobId,
-  };
+  if (!zoned.ok && zoned.code !== "TOO_FAR") throw new HttpError(422, zoned.message);
 
-  if (jobId) {
-    const { data: updated, error } = await admin
-      .from("jobs")
-      .update({
-        status: "priced",
-        distance_miles: distance.miles,
-        estimate_cents: estimate,
-        final_cents: estimate,
-        platform_fee_cents: split.platform_fee_cents,
-        driver_payout_cents: split.driver_payout_cents,
-        quote_lines: breakdown.lines,
-      })
-      .eq("id", jobId)
-      .in("status", ["draft", "priced"])
-      .select("*")
-      .maybeSingle();
-    if (error || !updated) throw new HttpError(409, "Could not save the quote");
+  const reuse = canReuseMapsDistance({
+    distance_source: job.distance_source,
+    billable_miles: job.billable_miles,
+    distance_miles: job.distance_miles,
+    quoted_pickup_lat: job.quoted_pickup_lat,
+    quoted_pickup_lng: job.quoted_pickup_lng,
+    quoted_dropoff_lat: job.quoted_dropoff_lat,
+    quoted_dropoff_lng: job.quoted_dropoff_lng,
+    pickup_lat: pickupLat,
+    pickup_lng: pickupLng,
+    dropoff_lat: dropoffLat,
+    dropoff_lng: dropoffLng,
+  });
+  let roadMiles = Number(job.distance_miles);
+  let distanceSource: "maps" | "estimated" = "maps";
+  if (!reuse) {
+    const distance = await routeMiles(pickupLat, pickupLng, dropoffLat, dropoffLng);
+    roadMiles = distance.miles;
+    distanceSource = distance.source;
+  }
+  const decision = coverageDecision({
+    pickupZip,
+    dropoffZip,
+    roadMiles,
+    zoneZips,
+    maxMiles: rates.maxLoadedMiles,
+  });
+  if (!decision.ok) throw new HttpError(422, decision.message);
+  if (distanceSource !== "maps") {
     await admin.from("job_events").insert({
       job_id: jobId,
-      type: "priced",
+      type: "distance_estimated",
       actor_id: user.id,
-      payload: result,
+      payload: { road_miles: roadMiles, alert: ESTIMATED_DISTANCE_ALERT },
     });
-    return json({ ...result, status: updated.status });
+    await notifyAdmins(admin, ESTIMATED_DISTANCE_ALERT, jobId);
+    return json({ error: DISTANCE_UNAVAILABLE, code: "distance_unavailable" }, 422);
+  }
+  const pickupInZone = decision.pickupInZone;
+  const dropoffInZone = decision.dropoffInZone;
+  const pickupFlights = Number(job.stairs_pickup_flights ?? 0);
+  const dropoffFlights = Number(job.stairs_dropoff_flights ?? 0);
+  const forced = requiresSecondPerson({
+    itemType: job.item_type,
+    size: tier,
+    weightBand: job.weight_band,
+    pickupFlights,
+    dropoffFlights,
+  });
+  const secondPerson = forced || job.needs_second_person === true;
+  const minutes = estimateJobMinutes(
+    { roadMiles, pickupInZone, dropoffInZone, sizeTier: tier as SizeTier, pickupFlights, dropoffFlights },
+    rates,
+  );
+  let quote;
+  try {
+    quote = computeQuote(
+      {
+        sizeTier: tier as SizeTier,
+        roadMiles,
+        distanceSource: "maps",
+        pickupInZone,
+        dropoffInZone,
+        pickupFlights,
+        dropoffFlights,
+        secondPerson,
+        estJobHours: minutes / 60,
+        vehicleType: "pickup",
+      },
+      rates,
+    );
+  } catch (err) {
+    if (err instanceof QuoteError && (err.code === "OUTSIDE_SERVICE_AREA" || err.code === "TOO_FAR")) {
+      throw new HttpError(422, "That's farther than we go right now. We cover trips that start or end around Pensacola, up to 70 miles.");
+    }
+    throw new HttpError(400, "Could not price this trip");
   }
 
-  return json(result);
+  const saved = {
+    status: "priced",
+    size_tier: tier,
+    vehicle_required: "pickup",
+    needs_second_person: secondPerson,
+    distance_miles: roadMiles,
+    billable_miles: quote.billableMiles,
+    distance_source: "maps",
+    pickup_zip: pickupZip,
+    dropoff_zip: dropoffZip,
+    pickup_in_zone: pickupInZone,
+    dropoff_in_zone: dropoffInZone,
+    quoted_pickup_lat: pickupLat,
+    quoted_pickup_lng: pickupLng,
+    quoted_dropoff_lat: dropoffLat,
+    quoted_dropoff_lng: dropoffLng,
+    est_job_minutes: minutes,
+    rates_version: quote.ratesVersion,
+    quoted_at: new Date().toISOString(),
+    estimate_cents: quote.totalCents,
+    final_cents: quote.totalCents,
+    platform_fee_cents: quote.platformFeeCents,
+    driver_share_cents: quote.driverShareCents,
+    driver_payout_cents: quote.leadDriverKeepsCents,
+    lead_payout_cents: quote.leadDriverKeepsCents,
+    helper_payout_cents: quote.helperShareCents,
+    quote_lines: quote.lines,
+  };
+  const { data: updated, error: saveError } = await admin
+    .from("jobs")
+    .update(saved)
+    .eq("id", jobId)
+    .in("status", ["draft", "priced"])
+    .select("*")
+    .maybeSingle();
+  if (saveError || !updated) throw new HttpError(409, "Could not save the quote");
+  await admin.from("job_events").insert({
+    job_id: jobId,
+    type: "priced",
+    actor_id: user.id,
+    payload: { total_cents: quote.totalCents, rates_version: quote.ratesVersion },
+  });
+  return json({
+    estimate_cents: quote.totalCents,
+    total_cents: quote.totalCents,
+    lines: quote.lines,
+    distance_miles: roadMiles,
+    billable_miles: quote.billableMiles,
+    distance_source: "maps",
+    platform_fee_cents: quote.platformFeeCents,
+    driver_payout_cents: quote.leadDriverKeepsCents,
+    lead_payout_cents: quote.leadDriverKeepsCents,
+    helper_payout_cents: quote.helperShareCents,
+    bookable: true,
+    currency: "usd" as const,
+    job_id: jobId,
+    status: updated.status,
+  });
 });
+

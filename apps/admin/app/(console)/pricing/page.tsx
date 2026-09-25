@@ -1,64 +1,42 @@
-import { SIZE_LABEL, VEHICLE_LABEL } from "@heft/shared";
-import { Flash } from "@/components/flash";
-import { updatePricingRule } from "@/lib/actions";
+import { PICKUP_RATES, SERVICE_ZONE_ZIPS, formatUsd } from "@heft/shared";
 import { requireAdmin } from "@/lib/auth";
 
-function dollars(cents: number): string {
-  return (cents / 100).toFixed(2);
-}
-
-export default async function PricingPage({ searchParams }: { searchParams: Promise<{ notice?: string }> }) {
+export default async function PricingPage() {
   const gate = await requireAdmin();
   if (!gate.configured) return null;
-  const { notice } = await searchParams;
-  const { data: rules } = await gate.supabase
-    .from("pricing_rules")
-    .select("*")
-    .order("vehicle_type")
-    .order("size_category");
+  const { data: zips } = await gate.supabase.from("service_zone_zips").select("zip").order("zip");
+  const { data: card } = await gate.supabase.from("rate_cards").select("*").eq("active", true).limit(1).maybeSingle();
+  const list = (zips ?? []).map((row) => row.zip as string);
+  const shown = list.length > 0 ? list : [...SERVICE_ZONE_ZIPS];
+  const rates = card ?? {
+    rates_version: PICKUP_RATES.ratesVersion,
+    base_cents: PICKUP_RATES.baseCents,
+    per_mile_cents: PICKUP_RATES.perMileCents,
+    min_fare_cents: PICKUP_RATES.minFareCents,
+    platform_fee_bps: PICKUP_RATES.platformFeeBps,
+    out_of_town_per_mile_cents: PICKUP_RATES.outOfTownPerMileCents,
+    max_loaded_miles: PICKUP_RATES.maxLoadedMiles,
+    max_flights_per_stop: PICKUP_RATES.maxFlightsPerStop,
+  };
 
   return (
     <main>
-      <h1 className="text-3xl font-semibold">Pricing rules</h1>
+      <h1 className="text-3xl font-semibold">Pricing</h1>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-steel">
-        Seeded Pensacola defaults. These rows are configuration, not revenue. Edits apply to the next quote. Amounts
-        are dollars; the database stores cents.
+        Active pickup rates, version {rates.rates_version}. The ZIP list is read-only and changes by migration.
       </p>
-      <Flash notice={notice} />
-      <ul className="mt-6 space-y-4">
-        {(rules ?? []).map((rule) => (
-          <li key={rule.id} className="border border-line bg-white p-5">
-            <form action={updatePricingRule} className="grid gap-3 md:grid-cols-6 md:items-end">
-              <input type="hidden" name="id" value={rule.id} />
-              <p className="text-sm font-semibold md:col-span-2">
-                {VEHICLE_LABEL[rule.vehicle_type] ?? rule.vehicle_type} · {SIZE_LABEL[rule.size_category] ?? rule.size_category}
-                <span className="mt-1 block text-xs font-normal uppercase tracking-wider text-steel">{rule.market}</span>
-              </p>
-              <label className="text-xs font-semibold uppercase tracking-wider text-steel">
-                Base
-                <input name="base_dollars" defaultValue={dollars(rule.base_cents)} className="mt-1 w-full border border-line px-2 py-2 font-mono text-sm" />
-              </label>
-              <label className="text-xs font-semibold uppercase tracking-wider text-steel">
-                Per mile
-                <input name="per_mile_dollars" defaultValue={dollars(rule.per_mile_cents)} className="mt-1 w-full border border-line px-2 py-2 font-mono text-sm" />
-              </label>
-              <label className="text-xs font-semibold uppercase tracking-wider text-steel">
-                Minimum
-                <input name="min_dollars" defaultValue={dollars(rule.min_cents)} className="mt-1 w-full border border-line px-2 py-2 font-mono text-sm" />
-              </label>
-              <label className="text-xs font-semibold uppercase tracking-wider text-steel">
-                Size ×
-                <input name="size_multiplier" defaultValue={Number(rule.size_multiplier).toFixed(2)} className="mt-1 w-full border border-line px-2 py-2 font-mono text-sm" />
-              </label>
-              <label className="flex items-center gap-2 text-sm md:col-span-2">
-                <input type="checkbox" name="active" defaultChecked={rule.active} />
-                Active
-              </label>
-              <button className="h-10 bg-charcoal px-4 text-sm font-semibold text-paper md:col-span-2" type="submit">
-                Save rule
-              </button>
-            </form>
-          </li>
+      <dl className="mt-6 grid max-w-xl gap-3 border border-line bg-white p-5 text-sm sm:grid-cols-2">
+        <div><dt className="text-xs uppercase tracking-wider text-steel">Base</dt><dd>{formatUsd(rates.base_cents)}</dd></div>
+        <div><dt className="text-xs uppercase tracking-wider text-steel">Per mile</dt><dd>{formatUsd(rates.per_mile_cents)}</dd></div>
+        <div><dt className="text-xs uppercase tracking-wider text-steel">Minimum</dt><dd>{formatUsd(rates.min_fare_cents)}</dd></div>
+        <div><dt className="text-xs uppercase tracking-wider text-steel">Fee</dt><dd>{Number(rates.platform_fee_bps) / 100}%</dd></div>
+        <div><dt className="text-xs uppercase tracking-wider text-steel">Out of town</dt><dd>{formatUsd(rates.out_of_town_per_mile_cents)} / mi</dd></div>
+        <div><dt className="text-xs uppercase tracking-wider text-steel">Cap</dt><dd>{rates.max_loaded_miles} mi · {rates.max_flights_per_stop} flights</dd></div>
+      </dl>
+      <h2 className="mt-8 text-xl font-semibold">Local ZIPs</h2>
+      <ul className="mt-3 flex max-w-3xl flex-wrap gap-2">
+        {shown.map((zip) => (
+          <li key={zip} className="rounded-full border border-line bg-white px-3 py-1 font-mono text-sm">{zip}</li>
         ))}
       </ul>
     </main>

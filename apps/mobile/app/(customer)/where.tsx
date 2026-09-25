@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { AccessibilityInfo, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { ArrowLeftRight, ArrowLeft, Clock, LocateFixed, MapPin } from "lucide-react-native";
-import { filterPlaces, HARDWARE_SUGGESTION, haversineMiles, PENSACOLA_CENTER, type PlacePreset } from "@heft/shared";
+import { DEMO_PLACES, DISTANCE_UNAVAILABLE, filterPlaces, HARDWARE_SUGGESTION, haversineMiles, PENSACOLA_CENTER, PENSACOLA_PLACES, type PlacePreset } from "@heft/shared";
 import { demoMode } from "../../src/lib/supabase";
+import { errorText, invoke } from "../../src/lib/invoke";
 import { haptic } from "../../src/lib/haptics";
-import { useBooking } from "../../src/store/booking";
+import { useBooking, type TripQuote } from "../../src/store/booking";
 import { C, font } from "../../src/components/v2";
 
 export default function WhereScreen() {
@@ -14,16 +15,51 @@ export default function WhereScreen() {
   const [focus, setFocus] = useState<"pickup" | "dropoff">(booking.pickup ? "dropoff" : "pickup");
   const [pickupText, setPickupText] = useState(booking.pickup?.address ?? "");
   const [dropText, setDropText] = useState(booking.dropoff?.address ?? "");
+  const [notice, setNotice] = useState("");
+  const announced = useRef(false);
   const query = focus === "pickup" ? pickupText : dropText;
-  const results = useMemo(() => (demoMode ? filterPlaces(query) : []), [query]);
+  const results = useMemo(
+    () => (demoMode ? filterPlaces(query, [...PENSACOLA_PLACES, ...DEMO_PLACES]) : []),
+    [query],
+  );
 
-  function finishIfReady() {
+  async function finishIfReady() {
     const state = useBooking.getState();
     if (!state.pickup || !state.dropoff || state.pickup.address === state.dropoff.address) return;
-    const step = state.skipAfterAddress === "price" && state.size ? "price" : state.presetItem ? "size" : "item";
-    booking.patch({ step });
-    if (router.canGoBack()) router.back();
-    else router.replace("/(customer)/home");
+    setNotice("");
+    try {
+      const covered = await invoke<TripQuote>("coverage", {
+        pickup_lat: state.pickup.lat,
+        pickup_lng: state.pickup.lng,
+        pickup_address: state.pickup.address,
+        pickup_zip: state.pickup.zip ?? null,
+        dropoff_lat: state.dropoff.lat,
+        dropoff_lng: state.dropoff.lng,
+        dropoff_address: state.dropoff.address,
+        dropoff_zip: state.dropoff.zip ?? null,
+      });
+      if (covered.distanceSource === "estimated" && !demoMode) {
+        booking.patch({ trip: null, distanceSource: null, distanceLabel: null, miles: null, lines: null, totalCents: null, jobId: null });
+        setNotice(DISTANCE_UNAVAILABLE);
+        return;
+      }
+      booking.patch({
+        trip: covered,
+        distanceSource: covered.distanceSource,
+        distanceLabel: demoMode ? (covered.distanceLabel ?? null) : null,
+      });
+      const step = state.skipAfterAddress === "price" && state.size ? "price" : state.presetItem ? "size" : "item";
+      booking.patch({ step });
+      if (router.canGoBack()) router.back();
+      else router.replace("/(customer)/home");
+    } catch (err) {
+      const message = errorText(err);
+      setNotice(message);
+      if (/pin down/i.test(message) && !announced.current) {
+        announced.current = true;
+        AccessibilityInfo.announceForAccessibility(message);
+      }
+    }
   }
 
   function choose(place: PlacePreset) {
@@ -48,6 +84,7 @@ export default function WhereScreen() {
       address: "1200 E Gadsden St, Pensacola",
       lat: PENSACOLA_CENTER.lat,
       lng: PENSACOLA_CENTER.lng,
+      zip: "32503",
     };
     booking.setPickup(here);
     setPickupText("Current location");
@@ -107,6 +144,16 @@ export default function WhereScreen() {
             <ArrowLeftRight color={C.ink} size={18} />
           </Pressable>
         </View>
+        {notice ? (
+          <View style={{ marginTop: 12 }}>
+            <Text accessibilityLiveRegion="polite" style={{ fontFamily: font.body, fontSize: 16, color: C.ink }}>{notice}</Text>
+            {/farther than we go/i.test(notice) ? (
+              <Pressable accessibilityRole="button" onPress={() => { setNotice(""); setFocus("dropoff"); }} style={{ minHeight: 44, justifyContent: "center" }}>
+                <Text style={{ fontFamily: font.semi, fontSize: 16, textDecorationLine: "underline" }}>Change address</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
         {focus === "pickup" ? (
           <Pressable onPress={useLocation} style={row}>
             <View style={tile}>

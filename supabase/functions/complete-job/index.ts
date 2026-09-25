@@ -1,7 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { HttpError, json, readJson, serveJson } from "../_shared/http.ts";
 import { notifyJobEvent } from "../_shared/notify.ts";
-import { captureHold, createTransfer, stripeConfigured } from "../_shared/stripe.ts";
+import { missingPayouts, payoutsComplete, requiredPayouts, shouldCaptureHold } from "../_shared/pricing.ts";
+import { captureHold, createTransfer, paymentIntentStatus, stripeConfigured } from "../_shared/stripe.ts";
 import { requireUser } from "../_shared/supabase.ts";
 
 serveJson(async (req) => {
@@ -16,63 +17,48 @@ serveJson(async (req) => {
   if (error || !job) throw new HttpError(404, "Job not found");
   const allowed = (job.driver_id === user.id && actor?.role === "driver") || actor?.role === "admin";
   if (!allowed) throw new HttpError(403, "Only the assigned driver can complete this job");
-  if (job.status === "paid") return json({ job, payout: null });
+  if (job.status === "paid") return json({ job, payouts: [] });
   if (job.status !== "delivered") throw new HttpError(409, "Mark the job delivered before completing it");
-  if (job.driver_payout_cents == null || job.final_cents == null) {
-    throw new HttpError(409, "Job is missing a final price");
-  }
+  const leadCents = Number(job.lead_payout_cents ?? job.driver_payout_cents ?? 0);
+  if (job.final_cents == null) throw new HttpError(409, "Job is missing a final price");
 
-  const { count } = await admin
-    .from("job_photos")
-    .select("id", { count: "exact", head: true })
-    .eq("job_id", job.id)
-    .eq("kind", "pod");
+  const { count } = await admin.from("job_photos").select("id", { count: "exact", head: true }).eq("job_id", job.id).eq("kind", "pod");
   if (!count) throw new HttpError(400, "Proof of delivery is required");
   if (!job.stripe_payment_intent_id) throw new HttpError(409, "No payment hold on this job");
 
-  const { data: existingPayout } = await admin
-    .from("payouts")
-    .select("*")
-    .eq("job_id", job.id)
-    .maybeSingle();
-
-  let payoutStatus: "pending" | "paid" = "pending";
-  let transferId: string | null = null;
-  if (!existingPayout) {
+  const required = requiredPayouts(job);
+  const { data: existing } = await admin.from("payouts").select("*").eq("job_id", job.id);
+  let payouts = existing ?? [];
+  const missing = missingPayouts(required, payouts);
+  const intentStatus = job.payment_captured_at ? "succeeded" : await paymentIntentStatus(job.stripe_payment_intent_id);
+  if (intentStatus === "canceled" || intentStatus === "cancelled") {
+    throw new HttpError(409, "The card hold is no longer available");
+  }
+  if (shouldCaptureHold({ capturedAt: job.payment_captured_at, intentStatus })) {
     await captureHold(job.stripe_payment_intent_id);
-    const { data: driver } = await admin
-      .from("driver_profiles")
-      .select("stripe_connect_account_id")
-      .eq("user_id", job.driver_id)
-      .maybeSingle();
-    const connectId = driver?.stripe_connect_account_id;
-    if (stripeConfigured() && connectId && job.driver_payout_cents > 0) {
-      transferId = await createTransfer(job.driver_payout_cents, connectId, job.id);
-      payoutStatus = "paid";
+    const capturedAt = new Date().toISOString();
+    const { error: stampError } = await admin.from("jobs").update({ payment_captured_at: capturedAt }).eq("id", job.id);
+    if (stampError) throw new HttpError(500, "Payment was captured but not recorded. Try again.");
+    job.payment_captured_at = capturedAt;
+  }
+  for (const need of missing) {
+    try {
+      payouts.push(await transferOne(admin, job, need.driverId, need.amountCents, need.role));
+    } catch (err) {
+      const { data: again } = await admin.from("payouts").select("*").eq("job_id", job.id).eq("driver_id", need.driverId).maybeSingle();
+      if (!again) throw err;
+      payouts.push(again);
     }
   }
-
-  let payout = existingPayout;
-  if (!payout) {
-    const inserted = await admin
-      .from("payouts")
-      .insert({
-        driver_id: job.driver_id,
-        job_id: job.id,
-        amount_cents: job.driver_payout_cents,
-        stripe_transfer_id: transferId,
-        status: payoutStatus,
-      })
-      .select("*")
-      .single();
-    if (inserted.error || !inserted.data) throw new HttpError(500, inserted.error?.message ?? "Payout was not recorded");
-    payout = inserted.data;
+  const { data: fresh } = await admin.from("payouts").select("*").eq("job_id", job.id);
+  payouts = fresh ?? payouts;
+  if (!payoutsComplete(required, payouts)) {
+    throw new HttpError(409, "A payout is still missing. Try again.");
   }
-  if (!payout) throw new HttpError(500, "Payout was not recorded");
 
   const { data: updated, error: updateError } = await admin
     .from("jobs")
-    .update({ status: "paid" })
+    .update({ status: "paid", driver_payout_cents: leadCents })
     .eq("id", job.id)
     .eq("status", "delivered")
     .select("*")
@@ -84,13 +70,43 @@ serveJson(async (req) => {
     type: "paid",
     actor_id: user.id,
     payload: {
-      payout_id: payout.id,
-      payout_status: payoutStatus,
-      stripe_transfer_id: transferId,
+      payout_ids: payouts.map((row: { id: string }) => row.id),
       sandbox: String(job.stripe_payment_intent_id).startsWith("pi_sandbox_"),
+      final_cents: job.final_cents,
     },
   });
   await notifyJobEvent(admin, updated, "paid");
   await notifyJobEvent(admin, updated, "payout_available");
-  return json({ job: updated, payout });
+  return json({ job: updated, payouts });
 });
+
+async function transferOne(
+  admin: { from: (table: string) => any },
+  job: { id: string },
+  driverId: string,
+  amount: number,
+  role: "lead" | "partner",
+) {
+  const { data: driver } = await admin.from("driver_profiles").select("stripe_connect_account_id").eq("user_id", driverId).maybeSingle();
+  let status: "pending" | "paid" = "pending";
+  let transferId: string | null = null;
+  const connectId = driver?.stripe_connect_account_id;
+  if (stripeConfigured() && connectId && amount > 0) {
+    transferId = await createTransfer(amount, connectId, `${job.id}:${role}`);
+    status = "paid";
+  }
+  const inserted = await admin
+    .from("payouts")
+    .insert({
+      driver_id: driverId,
+      job_id: job.id,
+      amount_cents: amount,
+      stripe_transfer_id: transferId,
+      status,
+      role,
+    })
+    .select("*")
+    .single();
+  if (inserted.error || !inserted.data) throw new HttpError(500, inserted.error?.message ?? "Payout was not recorded");
+  return inserted.data;
+}

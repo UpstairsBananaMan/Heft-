@@ -34,6 +34,25 @@ export async function setDriverStatus(formData: FormData) {
   redirect(`/drivers?notice=${status}`);
 }
 
+export async function setBackgroundCheck(formData: FormData) {
+  const gate = await requireAdmin();
+  if (!gate.configured) return;
+  const userId = String(formData.get("user_id") ?? "");
+  const done = formData.get("done") === "1";
+  if (!userId) redirect("/drivers?notice=invalid");
+  const { data: admin } = await gate.supabase.auth.getUser();
+  const { error } = await gate.supabase
+    .from("driver_profiles")
+    .update({
+      background_check_at: done ? new Date().toISOString() : null,
+      background_check_by: done ? admin.user?.id ?? null : null,
+    })
+    .eq("user_id", userId);
+  if (error) redirect("/drivers?notice=error");
+  revalidatePath("/drivers");
+  redirect("/drivers?notice=background");
+}
+
 export async function updatePricingRule(formData: FormData) {
   const gate = await requireAdmin();
   if (!gate.configured) return;

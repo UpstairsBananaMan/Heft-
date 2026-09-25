@@ -6,7 +6,7 @@ const ROLE_KEY = "heft-demo-role";
 const STATE_KEY = "heft-demo-state";
 const api = process.env.EXPO_PUBLIC_DEMO_API || "http://localhost:3000/api/demo";
 
-type RoleName = "customer" | "driver";
+type RoleName = "customer" | "driver" | "partner";
 type Listener = (event: string, session: { user: { id: string; email: string } } | null) => void;
 
 const listeners = new Set<Listener>();
@@ -15,6 +15,7 @@ let memory: DemoState | null = null;
 const PEOPLE = {
   customer: { id: DEMO_IDS.customer, email: "customer@heft.local", role: "customer" as const },
   driver: { id: DEMO_IDS.driver, email: "driver@heft.local", role: "driver" as const },
+  partner: { id: DEMO_IDS.partner, email: "partner@heft.local", role: "driver" as const },
 };
 
 function storage(): Storage | null {
@@ -24,7 +25,7 @@ function storage(): Storage | null {
 
 export function demoRole(): RoleName | null {
   const value = storage()?.getItem(ROLE_KEY);
-  return value === "driver" || value === "customer" ? value : null;
+  return value === "driver" || value === "customer" || value === "partner" ? value : null;
 }
 
 export function demoPerson(role: RoleName) {

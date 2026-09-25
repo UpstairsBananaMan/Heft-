@@ -1,5 +1,5 @@
 import { FlatList, Pressable, Text, View } from "react-native";
-import type { SizeCategory } from "@heft/shared";
+import { defaultSize, type SizeCategory } from "@heft/shared";
 import { Illustration } from "./Illustration";
 import { C, font } from "./v2";
 import { haptic } from "../lib/haptics";
@@ -20,7 +20,7 @@ export const IDEA_TILES: IdeaTile[] = [
   { id: "hardware", name: "Home Depot / Lowe's run", art: "idea-hardware-run", itemType: "lumber", description: "Building materials", hardware: true },
   { id: "mattress", name: "New mattress", art: "idea-mattress", itemType: "mattress", description: "Mattress" },
   { id: "appliance", name: "Appliance swap", art: "idea-appliance-swap", itemType: "appliance", description: "Appliance" },
-  { id: "moving", name: "Moving out", art: "idea-moving-out", itemType: "other", description: "Multiple items" },
+  { id: "moving", name: "Moving out", art: "idea-moving-out", itemType: "moving_out", description: "A room's worth", size: defaultSize("moving_out") ?? "truckload" },
 ];
 
 const TILE = 148;

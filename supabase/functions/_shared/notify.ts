@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.49.8";
+import { APP_NAME } from "../../../packages/shared/src/brand.ts";
 import { haversineMiles, vehicleCovers } from "./pricing.ts";
 
 type JobRow = {
@@ -68,7 +69,7 @@ export async function notifyJobEvent(
       .in("user_id", userIds);
     const messages = (tokens ?? []).map((row) => ({
       to: row.token,
-      title: "Heft",
+      title: APP_NAME,
       body: COPY[event] ?? `Job update: ${event}`,
       data: { job_id: job.id, event },
       sound: "default",
@@ -87,6 +88,37 @@ export async function notifyJobEvent(
     return { sent: messages.length };
   } catch (err) {
     console.warn("notify failed", err);
+    return { sent: 0 };
+  }
+}
+
+export async function notifyAdmins(
+  admin: SupabaseClient,
+  message: string,
+  jobId: string,
+): Promise<{ sent: number }> {
+  try {
+    const { data: admins } = await admin.from("users").select("id").eq("role", "admin");
+    const ids = (admins ?? []).map((row: { id: string }) => row.id);
+    if (ids.length === 0) return { sent: 0 };
+    const { data: tokens } = await admin.from("device_tokens").select("token").in("user_id", ids);
+    const messages = (tokens ?? []).map((row: { token: string }) => ({
+      to: row.token,
+      title: APP_NAME,
+      body: message,
+      data: { job_id: jobId, event: "distance_estimated" },
+      sound: "default",
+    }));
+    if (messages.length === 0) return { sent: 0 };
+    const res = await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(messages),
+    });
+    if (!res.ok) return { sent: 0 };
+    return { sent: messages.length };
+  } catch (err) {
+    console.warn("admin alert failed", err);
     return { sent: 0 };
   }
 }
